@@ -216,6 +216,17 @@ def load_templates():
 UNKNOWN_DIR = None      # dossier d'archivage des ecrans non reconnus
 _unknown_seen = {}
 
+# Entre deux vues, le jeu passe par un fondu au blanc ou l'image se delave
+# presque entierement. Ces images ne correspondent a aucun ecran, mais ce ne
+# sont pas des imprevus : il faut simplement attendre, pas appuyer sur retour.
+# Mesures : ecart-type de 6 sur un fondu, de 54 a 86 sur tout ecran reel.
+TRANSITION_STD_MAX = 25.0
+
+
+def is_transition(img):
+    """L'image est-elle un fondu entre deux vues plutot qu'un vrai ecran ?"""
+    return float(img.std()) < TRANSITION_STD_MAX
+
 
 def record_unknown(img, tag, limit=300):
     """Archive un ecran non reconnu, pour pouvoir le traiter ensuite.
@@ -701,6 +712,9 @@ def back_to_home(phone, templates, tries=4):
         img = phone.screenshot()
         if identify(img, templates)[0] == "home":
             return True
+        if is_transition(img):
+            time.sleep(1.0)     # fondu : rien a refermer, il faut attendre
+            continue
         if i == tries - 1:
             record_unknown(img, "retour-village")
         phone.back()
@@ -833,6 +847,9 @@ def goto_battle(phone, templates, timeout=150):
         if screen == "battle":
             return True
         if screen is None:
+            if is_transition(img):
+                time.sleep(0.8)     # fondu en cours : laisser l'ecran arriver
+                continue
             unknown += 1
             # Popup (noter l'appli, offre du jour...) : un retour arriere suffit
             if unknown >= 3:
@@ -894,6 +911,9 @@ def end_battle(phone, templates, args):
             phone.tap(*SCREENS[screen]["tap"])
             unknown = 0
             time.sleep(3.0 if screen == "battle" else 2.0)
+            continue
+        if is_transition(img):
+            time.sleep(1.0)     # fondu de sortie de combat : laisser passer
             continue
         # Popup de confirmation : le bouton rouge est au centre-droit du panneau.
         unknown += 1
