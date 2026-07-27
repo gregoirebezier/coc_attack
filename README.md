@@ -103,6 +103,15 @@ le complément contre des gemmes, avec un gros bouton vert au centre de l'écran
 Le programme ne clique jamais dans cette fenêtre : il en ressort au bouton
 retour d'Android.
 
+**Attention à la sortie du jeu.** Au village, le bouton retour d'Android ouvre
+« Voulez-vous quitter le jeu ? », dont le bouton OK ferme Clash of Clans. Cette
+fenêtre laisse le village visible derrière elle et passait pour l'écran
+d'accueil (score 37,6 pour un seuil à 40) : le programme agissait par-dessus.
+Elle est désormais reconnue à son bouton Annuler orange — 10,7 % d'orange dans
+cette case, contre moins de 2 % sur tout autre écran — et annulée. Le programme
+n'appuie plus sur retour quand rien n'est sélectionné, ce qui l'ouvrait pour
+rien.
+
 Le succès ne se juge donc ni sur la fermeture du menu, ni sur celle de la
 fenêtre — après un achat réussi le jeu rouvre aussitôt la confirmation pour le
 niveau suivant. Seule preuve fiable : **le compteur de ressources a baissé**

@@ -256,6 +256,31 @@ def record_unknown(img, tag, limit=300):
     print(f"[dbg] ecran inconnu archive : {path}", flush=True)
 
 
+# Dialogue "Voulez-vous quitter le jeu ?", declenche par le bouton retour
+# d'Android quand rien n'est ouvert. Son bouton OK ferme Clash of Clans : il ne
+# faut jamais le toucher. On le reconnait a son bouton Annuler orange (10.7 %
+# d'orange dans cette case, contre moins de 2 % sur tout autre ecran) ; le seul
+# panneau blanc ne suffisait pas, la fenetre d'amelioration lui ressemble trop.
+QUIT_PANEL = (760, 240, 1660, 800)
+QUIT_CANCEL_BOX = (880, 630, 1120, 755)
+QUIT_CANCEL = (990, 690)
+
+
+def quit_dialog_open(img):
+    """La confirmation de sortie du jeu est-elle affichee ?"""
+    x0, y0, x1, y1 = QUIT_PANEL
+    c = img[y0:y1, x0:x1]
+    blanc = ((c[:, :, 0] > 228) & (c[:, :, 1] > 222) & (c[:, :, 2] > 212)).mean()
+    if float(blanc) * 100 < 55:
+        return False
+    x0, y0, x1, y1 = QUIT_CANCEL_BOX
+    c = img[y0:y1, x0:x1]
+    r, g, b = c[:, :, 0], c[:, :, 1], c[:, :, 2]
+    orange = ((r > 195) & (g > 90) & (g < 175) & (b < 95) &
+              (r - g > 60) & (g - b > 25)).mean()
+    return float(orange) * 100 > 5
+
+
 def identify(img, templates):
     """Renvoie (nom_ecran, score) du meilleur template, ou (None, score).
 
@@ -265,6 +290,12 @@ def identify(img, templates):
     il retombe a 32.9, loin devant le suivant (62.9) : la marge redevient
     confortable sans rapprocher les ecrans entre eux.
     """
+    # A verifier avant les templates : ce dialogue laisse le village visible
+    # derriere lui et passe pour l'ecran d'accueil (score 37.6 pour un seuil
+    # a 40), ce qui ferait agir a l'aveugle par-dessus.
+    if quit_dialog_open(img):
+        return "quit", 0.0
+
     best, best_score = None, 1e9
     for name, cfg in SCREENS.items():
         x0, y0, x1, y1 = cfg["box"]
@@ -707,6 +738,21 @@ def selected_title(img):
     return pytesseract.image_to_string(big, config="--psm 7").strip()
 
 
+def titre_est_rempart(titre):
+    """Le titre lu designe-t-il un rempart ?
+
+    L'OCR se trompe regulierement d'une lettre sur ce texte incruste dans le
+    decor : "Rempahrt", "Rempart" avec un accent parasite... Exiger le mot
+    exact faisait rejeter des murs parfaitement selectionnes, d'ou la
+    comparaison approchee.
+    """
+    import difflib
+    for mot in re.findall(r"[a-z]+", titre.lower()):
+        if difflib.SequenceMatcher(None, mot, "rempart").ratio() > 0.7:
+            return True
+    return False
+
+
 def confirm_dialog_open(img):
     """La fenetre "Ameliorer votre Rempart au niveau N ?" est-elle affichee ?"""
     x0, y0, x1, y1 = CONFIRM_PANEL
@@ -719,8 +765,14 @@ def back_to_home(phone, templates, tries=4):
     """Referme ce qui traine jusqu'a retrouver le village."""
     for i in range(tries):
         img = phone.screenshot()
-        if identify(img, templates)[0] == "home":
+        ecran = identify(img, templates)[0]
+        if ecran == "home":
             return True
+        if ecran == "quit":
+            # C'est notre propre retour arriere qui l'a ouvert : on annule.
+            phone.tap(*QUIT_CANCEL)
+            time.sleep(1.2)
+            continue
         if is_transition(img):
             time.sleep(1.0)     # fondu : rien a refermer, il faut attendre
             continue
@@ -742,15 +794,21 @@ def pay_upgrade(phone, templates, resource):
     time.sleep(1.5)
     img = phone.screenshot()
     if not confirm_dialog_open(img):
-        return False        # ressource insuffisante : le jeu n'a rien propose
+        # Bouton indisponible : mur deja au maximum, rangee en cours, ou la
+        # ressource manque. Le jeu n'a simplement rien propose.
+        print(f"    [{resource}] aucune fenetre de confirmation")
+        return False
 
     x0, y0, x1, y1 = HUD_BOX
     avant = img[y0:y1, x0:x1]
     phone.tap(*CONFIRM_BUTTON)
     time.sleep(2.2)
     img = phone.screenshot()
-    paye = float(np.abs(avant.astype(np.int32)
-                        - img[y0:y1, x0:x1].astype(np.int32)).mean()) > HUD_CHANGED_MAD
+    ecart = float(np.abs(avant.astype(np.int32)
+                         - img[y0:y1, x0:x1].astype(np.int32)).mean())
+    paye = ecart > HUD_CHANGED_MAD
+    print(f"    [{resource}] confirme, ecart des reserves = {ecart:.1f}"
+          f" -> {'paye' if paye else 'refuse'}")
 
     if (confirm_dialog_open(img) or menu_open(img)
             or identify(img, templates)[0] != "home"):
@@ -790,7 +848,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
 
         def is_wall_selected(shot=None):
             shot = phone.screenshot() if shot is None else shot
-            return menu_open(shot) and "rempart" in selected_title(shot).lower()
+            return menu_open(shot) and titre_est_rempart(selected_title(shot))
 
         def select():
             """Selectionne le mur vise et confirme que c'en est bien un."""
@@ -799,8 +857,12 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             return is_wall_selected()
 
         if not select():
-            phone.back()
-            time.sleep(0.7)
+            # Le tap a manque le mur. S'il n'a rien selectionne du tout, il ne
+            # faut surtout pas appuyer sur retour : au village, cela ouvre la
+            # confirmation de sortie du jeu.
+            if menu_open(phone.screenshot()):
+                phone.back()
+                time.sleep(0.7)
             continue
 
         paye = False
@@ -855,6 +917,10 @@ def goto_battle(phone, templates, timeout=150):
 
         if screen == "battle":
             return True
+        if screen == "quit":
+            phone.tap(*QUIT_CANCEL)
+            time.sleep(1.2)
+            continue
         if screen is None:
             if is_transition(img):
                 time.sleep(0.8)     # fondu en cours : laisser l'ecran arriver
@@ -921,17 +987,21 @@ def end_battle(phone, templates, args):
             unknown = 0
             time.sleep(3.0 if screen == "battle" else 2.0)
             continue
+        if screen == "quit":
+            phone.tap(*QUIT_CANCEL)
+            time.sleep(1.2)
+            continue
         if is_transition(img):
             time.sleep(1.0)     # fondu de sortie de combat : laisser passer
             continue
-        # Popup de confirmation : le bouton rouge est au centre-droit du panneau.
         unknown += 1
         print(f"[i] ecran inconnu en fin de combat (score {score:.0f})")
         record_unknown(img, "fin-combat")
-        if unknown == 1:
-            phone.tap(1390, 640)
-        else:
-            phone.back()
+        # On ne tape plus au jugé au centre de l'ecran : le point utilise
+        # jusqu'ici tombait a cinquante pixels du bouton OK qui ferme le jeu.
+        # Le retour arriere referme les fenetres sans ce risque, et la
+        # confirmation de sortie qu'il declencherait est geree juste au-dessus.
+        phone.back()
         time.sleep(2.0)
     return False
 
