@@ -137,11 +137,6 @@ CONFIRM_BUTTON = (1588, 930)
 # depense, 10 a 24 des qu'une ressource bouge.
 HUD_BOX = (1990, 35, 2165, 200)
 HUD_CHANGED_MAD = 3.0
-# Lignes d'or et d'elixir du bandeau, lues par OCR pour choisir la reserve a
-# depenser. Le cout affiche sur les boutons, lui, est trop petit et pose sur
-# un fond trop charge pour etre lu de facon fiable : on se contente donc de
-# commencer par la reserve la plus fournie.
-RESERVE_LINES = {"or": (1890, 42, 2170, 84), "elixir": (1890, 146, 2170, 188)}
 
 
 class Phone:
@@ -821,25 +816,6 @@ def upgrade_buttons(img):
     return trouves
 
 
-def read_reserves(img):
-    """Or et elixir disponibles, lus dans le bandeau. None si illisible."""
-    try:
-        import pytesseract
-    except ImportError:
-        return {}
-    out = {}
-    for nom, (x0, y0, x1, y1) in RESERVE_LINES.items():
-        crop = img[y0:y1, x0:x1]
-        mask = (crop.min(axis=2) > 170).astype(np.uint8) * 255
-        big = Image.fromarray(255 - mask).resize(
-            ((x1 - x0) * 6, (y1 - y0) * 6), Image.LANCZOS)
-        txt = pytesseract.image_to_string(
-            big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
-        chiffres = re.sub(r"\D", "", txt)
-        out[nom] = int(chiffres) if chiffres and len(chiffres) <= 9 else None
-    return out
-
-
 def titre_est_rempart(titre):
     """Le titre lu designe-t-il un rempart ?
 
@@ -903,6 +879,12 @@ def pay_upgrade(phone, templates, resource):
         # deja en chantier, ou reserve trop juste.
         print(f"    [{resource}] bouton absent du menu")
         return "indisponible"
+
+    if not cost_affordable(menu, boutons[resource][0]):
+        # Le prix s'affiche en rouge : inutile de cliquer. On s'epargne la
+        # fenetre d'achat de gemmes et les quinze secondes qu'elle coute.
+        print(f"    [{resource}] prix en rouge, reserve insuffisante")
+        return "refuse"
 
     phone.tap(*boutons[resource])
     time.sleep(1.5)
@@ -1021,27 +1003,11 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 time.sleep(0.7)
             continue
 
-        # Le jeu ecrit en rouge le prix qu'on ne peut pas payer : on ne tente
-        # que les ressources qui passent. Un essai voue a l'echec ouvrirait la
-        # fenetre d'achat de gemmes, dont la fermeture deselectionne le mur et
-        # faisait echouer la tentative suivante dans la foulee.
-        shot = phone.screenshot()
-        payables = [r for r, cx in upgrade_buttons(shot).items()
-                    if cost_affordable(shot, cx[0])]
-        if payables:
-            # Les rangs sont figes avant le tri : pendant un sort en place,
-            # la liste apparait vide au code appele par la cle.
-            rang = {r: i for i, r in enumerate(order)}
-            order.sort(key=lambda r: (r not in payables, rang[r]))
-        candidates = [r for r in order if r not in epuisees
-                      and (not payables or r in payables)]
-        if not candidates:
-            if verbose:
-                print("[i] aucune reserve ne couvre le prix affiche")
-            break
-
+        # Le prix rouge est lu dans pay_upgrade, une fois le mur selectionne :
+        # hors de son menu, les boutons n'existent pas et l'information n'est
+        # pas disponible.
         paye = False
-        for resource in candidates:
+        for resource in [r for r in order if r not in epuisees]:
             # Selon la facon dont l'essai precedent s'est termine, le mur est
             # encore selectionne ou non. Retaper un mur deja selectionne le
             # deselectionne : il faut donc verifier avant, pas re-cliquer a
