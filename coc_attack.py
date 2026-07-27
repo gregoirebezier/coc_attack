@@ -106,9 +106,12 @@ LOOT_X = (195, 430)
 # des remparts, et comme ce sont les plus grosses taches de l'image, le
 # programme cliquait sur ses propres boutons au lieu d'un mur.
 VILLAGE_AREA = (300, 130, 2120, 740)
-# Le dessus des remparts est d'un creme clair tres reconnaissable (240,224,192),
-# la ou les batiments sont gris, bleus ou sombres.
+# Un rempart se reconnait a deux couleurs, selon son niveau : le creme clair
+# de son dessus (240,240,200), et la coiffe doree (240,224,80) qui apparait
+# aux niveaux eleves. Chercher le seul creme laissait de cote les remparts
+# deja montes, qu'il faut pourtant continuer a ameliorer.
 WALL_CREAM = dict(r_min=215, g_min=198, b_min=165, rb_min=28, rb_max=80, rg_max=32)
+WALL_GOLD = dict(r_min=215, g_min=195, b_max=125, rb_min=130, rg_max=45)
 WALL_AREA_MIN = 400
 WALL_MIN_RATIO = 1.8     # allongement minimal pour distinguer un mur d'un toit
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
@@ -743,9 +746,13 @@ def wall_candidates(img):
     z = img[y0:y1, x0:x1]
     r, g, b = z[:, :, 0], z[:, :, 1], z[:, :, 2]
     c = WALL_CREAM
-    mask = ((r > c["r_min"]) & (g > c["g_min"]) & (b > c["b_min"]) &
-            (r - b > c["rb_min"]) & (r - b < c["rb_max"]) &
-            (abs(r - g) < c["rg_max"])).astype(np.uint8)
+    creme = ((r > c["r_min"]) & (g > c["g_min"]) & (b > c["b_min"]) &
+             (r - b > c["rb_min"]) & (r - b < c["rb_max"]) &
+             (abs(r - g) < c["rg_max"]))
+    o = WALL_GOLD
+    coiffe = ((r > o["r_min"]) & (g > o["g_min"]) & (b < o["b_max"]) &
+              (r - b > o["rb_min"]) & (abs(r - g) < o["rg_max"]))
+    mask = (creme | coiffe).astype(np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,
                             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
     n, _lab, stats, cent = cv2.connectedComponentsWithStats(mask, 8)
