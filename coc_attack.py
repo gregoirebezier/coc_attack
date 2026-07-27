@@ -268,24 +268,26 @@ def record_unknown(img, tag, limit=300):
     print(f"[dbg] ecran inconnu archive : {path}", flush=True)
 
 
-# Dialogue "Voulez-vous quitter le jeu ?", declenche par le bouton retour
-# d'Android quand rien n'est ouvert. Son bouton OK ferme Clash of Clans : il ne
-# faut jamais le toucher. On le reconnait a son bouton Annuler orange (10.7 %
-# d'orange dans cette case, contre moins de 2 % sur tout autre ecran) ; le seul
-# panneau blanc ne suffisait pas, la fenetre d'amelioration lui ressemble trop.
-QUIT_PANEL = (760, 240, 1660, 800)
-QUIT_CANCEL_BOX = (880, 630, 1120, 755)
-QUIT_CANCEL = (990, 690)
+# Fenetre generique Annuler / OK du jeu. Elle sert aussi bien a confirmer la
+# sortie de Clash of Clans qu'a valider une amelioration groupee de remparts a
+# plusieurs millions : dans les deux cas, OK engage quelque chose qu'on ne veut
+# pas, et Annuler se trouve au meme endroit. On annule donc toujours.
+# Elle se reconnait a son bouton Annuler orange (10.7 % d'orange dans cette
+# case, contre moins de 2 % sur tout autre ecran) ; le seul panneau blanc ne
+# suffisait pas, la fenetre d'amelioration d'un mur lui ressemble trop.
+CANCEL_PANEL = (760, 240, 1660, 800)
+CANCEL_BOX = (880, 630, 1120, 755)
+CANCEL_BUTTON = (990, 690)
 
 
-def quit_dialog_open(img):
-    """La confirmation de sortie du jeu est-elle affichee ?"""
-    x0, y0, x1, y1 = QUIT_PANEL
+def cancel_dialog_open(img):
+    """Une fenetre Annuler / OK est-elle affichee ?"""
+    x0, y0, x1, y1 = CANCEL_PANEL
     c = img[y0:y1, x0:x1]
     blanc = ((c[:, :, 0] > 228) & (c[:, :, 1] > 222) & (c[:, :, 2] > 212)).mean()
     if float(blanc) * 100 < 55:
         return False
-    x0, y0, x1, y1 = QUIT_CANCEL_BOX
+    x0, y0, x1, y1 = CANCEL_BOX
     c = img[y0:y1, x0:x1]
     r, g, b = c[:, :, 0], c[:, :, 1], c[:, :, 2]
     orange = ((r > 195) & (g > 90) & (g < 175) & (b < 95) &
@@ -308,8 +310,8 @@ def identify(img, templates):
     # Ces deux fenetres assombrissent le village sans le masquer : en annulant
     # l'ecart de luminosite, la comparaison les prend pour l'ecran d'accueil.
     # Elles sont donc reconnues a leur contenu propre, avant les templates.
-    if quit_dialog_open(img):
-        return "quit", 0.0
+    if cancel_dialog_open(img):
+        return "cancel", 0.0
     if confirm_dialog_open(img):
         return "confirm", 0.0
 
@@ -784,7 +786,11 @@ def upgrade_buttons(img):
     ressource absente signifie que le jeu ne propose pas cette amelioration.
     """
     trouves = {}
-    for cx in menu_buttons(img):
+    # Seuls les deux derniers boutons ameliorent le mur selectionne. Celui qui
+    # les precede, "Ameliorer plus", porte lui aussi une piece d'or : il etait
+    # pris pour le bouton en or et lancait une amelioration groupee a plusieurs
+    # millions, que le jeu proposait alors de confirmer.
+    for cx in menu_buttons(img)[-2:]:
         bandeau = img[750:798, cx + 35:cx + 125]
         r, g, b = bandeau[:, :, 0], bandeau[:, :, 1], bandeau[:, :, 2]
         piece = float(((r > 200) & (g > 150) & (g < 225) & (b < 110)).mean()) * 100
@@ -825,9 +831,9 @@ def back_to_home(phone, templates, tries=4):
         ecran = identify(img, templates)[0]
         if ecran == "home":
             return True
-        if ecran == "quit":
+        if ecran == "cancel":
             # C'est notre propre retour arriere qui l'a ouvert : on annule.
-            phone.tap(*QUIT_CANCEL)
+            phone.tap(*CANCEL_BUTTON)
             time.sleep(1.2)
             continue
         if ecran == "confirm":
@@ -861,6 +867,13 @@ def pay_upgrade(phone, templates, resource):
     phone.tap(*boutons[resource])
     time.sleep(1.5)
     img = phone.screenshot()
+    if cancel_dialog_open(img):
+        # Fenetre Annuler / OK : le jeu propose autre chose que l'amelioration
+        # du seul mur vise, typiquement un lot a plusieurs millions. On refuse.
+        print(f"    [{resource}] proposition groupee refusee")
+        phone.tap(*CANCEL_BUTTON)
+        time.sleep(1.2)
+        return False
     if not confirm_dialog_open(img):
         print(f"    [{resource}] aucune fenetre de confirmation")
         record_unknown(img, f"ameliorer-{resource}")
@@ -1000,8 +1013,8 @@ def goto_battle(phone, templates, timeout=150):
 
         if screen == "battle":
             return True
-        if screen == "quit":
-            phone.tap(*QUIT_CANCEL)
+        if screen == "cancel":
+            phone.tap(*CANCEL_BUTTON)
             time.sleep(1.2)
             continue
         if screen == "confirm":
@@ -1076,8 +1089,8 @@ def end_battle(phone, templates, args):
             unknown = 0
             time.sleep(3.0 if screen == "battle" else 2.0)
             continue
-        if screen == "quit":
-            phone.tap(*QUIT_CANCEL)
+        if screen == "cancel":
+            phone.tap(*CANCEL_BUTTON)
             time.sleep(1.2)
             continue
         if screen == "confirm":
