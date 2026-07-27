@@ -784,6 +784,21 @@ def menu_buttons(img):
     return best
 
 
+def cost_affordable(img, cx):
+    """Le prix affiche sur ce bouton est-il payable ?
+
+    Le jeu ecrit le cout en rouge quand la reserve ne suffit pas. C'est une
+    reponse directe et exacte, la ou lire les reserves par OCR se trompait :
+    le cadrage perdait un chiffre sur les grands nombres, et le bandeau change
+    d'aspect selon l'ecran. Mesures : 24.6 % de rouge sur un prix hors de
+    portee, 0.0 % sur un prix payable.
+    """
+    b = img[758:796, max(0, cx - 70):cx + 60]
+    r, g, bl = b[:, :, 0], b[:, :, 1], b[:, :, 2]
+    rouge = float(((r > 150) & (r - g > 55) & (r - bl > 55)).mean()) * 100
+    return rouge < 8.0
+
+
 def upgrade_buttons(img):
     """Position des boutons "Ameliorer", par ressource.
 
@@ -895,10 +910,15 @@ def pay_upgrade(phone, templates, resource):
     if cancel_dialog_open(img):
         # Fenetre Annuler / OK : le jeu propose autre chose que l'amelioration
         # du seul mur vise, typiquement un lot a plusieurs millions. On refuse.
-        print(f"    [{resource}] proposition groupee refusee")
+        # Le jeu est en mode selection multiple : son titre porte un "xN" et
+        # sa confirmation est la fenetre Annuler / OK, pas celle d'un mur seul.
+        # On refuse, puis on quitte ce mode pour retrouver le menu ordinaire.
+        print(f"    [{resource}] mode selection multiple, on en sort")
         record_unknown(menu, f"menu-groupe-{resource}")
         phone.tap(*CANCEL_BUTTON)
         time.sleep(1.2)
+        phone.back()
+        time.sleep(1.0)
         return False
     if not confirm_dialog_open(img):
         print(f"    [{resource}] aucune fenetre de confirmation")
@@ -915,6 +935,21 @@ def pay_upgrade(phone, templates, resource):
     paye = ecart > HUD_CHANGED_MAD
     print(f"    [{resource}] confirme, ecart des reserves = {ecart:.1f}"
           f" -> {'paye' if paye else 'refuse'}")
+
+    if not paye:
+        # Un refus empile la fenetre d'achat de gemmes par-dessus celle de
+        # confirmation. Remonter jusqu'au village deselectionnerait le mur et
+        # ferait echouer l'essai avec l'autre reserve : on ne referme donc que
+        # ce qui est ouvert, en s'arretant des que le menu du mur reapparait.
+        record_unknown(menu, f"refus-{resource}")
+        for _ in range(3):
+            shot = phone.screenshot()
+            if menu_open(shot) and not confirm_dialog_open(shot) \
+                    and not cancel_dialog_open(shot):
+                return False
+            phone.back()
+            time.sleep(1.0)
+        return False
 
     if (confirm_dialog_open(img) or menu_open(img)
             or identify(img, templates)[0] != "home"):
@@ -986,20 +1021,24 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 time.sleep(0.7)
             continue
 
-        # On commence par la reserve la plus fournie. Un essai qui echoue
-        # ouvre la fenetre d'achat de gemmes, dont la fermeture deselectionne
-        # le mur : mieux vaut viser juste du premier coup que rattraper. Le
-        # cout affiche sur les boutons serait plus precis, mais il est trop
-        # petit et trop mal contraste pour etre lu de facon fiable.
-        reserves = read_reserves(img)
-        if any(v is not None for v in reserves.values()):
-            order.sort(key=lambda r: -(reserves.get(r) or 0))
-            if verbose and not upgraded:
-                print(f"[i] reserves lues : " + ", ".join(
-                    f"{k}={v}" for k, v in reserves.items()))
+        # Le jeu ecrit en rouge le prix qu'on ne peut pas payer : on ne tente
+        # que les ressources qui passent. Un essai voue a l'echec ouvrirait la
+        # fenetre d'achat de gemmes, dont la fermeture deselectionne le mur et
+        # faisait echouer la tentative suivante dans la foulee.
+        shot = phone.screenshot()
+        payables = [r for r, cx in upgrade_buttons(shot).items()
+                    if cost_affordable(shot, cx[0])]
+        if payables:
+            order.sort(key=lambda r: (r not in payables, order.index(r)))
+        candidates = [r for r in order if r not in epuisees
+                      and (not payables or r in payables)]
+        if not candidates:
+            if verbose:
+                print("[i] aucune reserve ne couvre le prix affiche")
+            break
 
         paye = False
-        for resource in [r for r in order if r not in epuisees]:
+        for resource in candidates:
             # Selon la facon dont l'essai precedent s'est termine, le mur est
             # encore selectionne ou non. Retaper un mur deja selectionne le
             # deselectionne : il faut donc verifier avant, pas re-cliquer a
