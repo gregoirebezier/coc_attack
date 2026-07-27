@@ -137,6 +137,11 @@ CONFIRM_BUTTON = (1588, 930)
 # depense, 10 a 24 des qu'une ressource bouge.
 HUD_BOX = (1990, 35, 2165, 200)
 HUD_CHANGED_MAD = 3.0
+# Lignes d'or et d'elixir du bandeau, lues par OCR pour choisir la reserve a
+# depenser. Le cout affiche sur les boutons, lui, est trop petit et pose sur
+# un fond trop charge pour etre lu de facon fiable : on se contente donc de
+# commencer par la reserve la plus fournie.
+RESERVE_LINES = {"or": (1890, 42, 2170, 84), "elixir": (1890, 146, 2170, 188)}
 
 
 class Phone:
@@ -801,6 +806,25 @@ def upgrade_buttons(img):
     return trouves
 
 
+def read_reserves(img):
+    """Or et elixir disponibles, lus dans le bandeau. None si illisible."""
+    try:
+        import pytesseract
+    except ImportError:
+        return {}
+    out = {}
+    for nom, (x0, y0, x1, y1) in RESERVE_LINES.items():
+        crop = img[y0:y1, x0:x1]
+        mask = (crop.min(axis=2) > 170).astype(np.uint8) * 255
+        big = Image.fromarray(255 - mask).resize(
+            ((x1 - x0) * 6, (y1 - y0) * 6), Image.LANCZOS)
+        txt = pytesseract.image_to_string(
+            big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
+        chiffres = re.sub(r"\D", "", txt)
+        out[nom] = int(chiffres) if chiffres and len(chiffres) <= 9 else None
+    return out
+
+
 def titre_est_rempart(titre):
     """Le titre lu designe-t-il un rempart ?
 
@@ -857,7 +881,8 @@ def pay_upgrade(phone, templates, resource):
     des gemmes. On ne clique jamais dans cette fenetre : le succes se juge au
     retour effectif au village, et on ressort au bouton retour.
     """
-    boutons = upgrade_buttons(phone.screenshot())
+    menu = phone.screenshot()
+    boutons = upgrade_buttons(menu)
     if resource not in boutons:
         # Le jeu ne propose pas cette amelioration : mur au maximum, rangee
         # deja en chantier, ou reserve trop juste.
@@ -871,6 +896,7 @@ def pay_upgrade(phone, templates, resource):
         # Fenetre Annuler / OK : le jeu propose autre chose que l'amelioration
         # du seul mur vise, typiquement un lot a plusieurs millions. On refuse.
         print(f"    [{resource}] proposition groupee refusee")
+        record_unknown(menu, f"menu-groupe-{resource}")
         phone.tap(*CANCEL_BUTTON)
         time.sleep(1.2)
         return False
@@ -948,6 +974,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             return False
 
         if not select():
+            if verbose:
+                shot = phone.screenshot()
+                print(f"    mur ({int(point[0])},{int(point[1])}) non selectionne "
+                      f"(menu={menu_open(shot)}, titre={selected_title(shot)!r})")
             # Le tap a manque le mur. S'il n'a rien selectionne du tout, il ne
             # faut surtout pas appuyer sur retour : au village, cela ouvre la
             # confirmation de sortie du jeu.
@@ -955,6 +985,18 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 phone.back()
                 time.sleep(0.7)
             continue
+
+        # On commence par la reserve la plus fournie. Un essai qui echoue
+        # ouvre la fenetre d'achat de gemmes, dont la fermeture deselectionne
+        # le mur : mieux vaut viser juste du premier coup que rattraper. Le
+        # cout affiche sur les boutons serait plus precis, mais il est trop
+        # petit et trop mal contraste pour etre lu de facon fiable.
+        reserves = read_reserves(img)
+        if any(v is not None for v in reserves.values()):
+            order.sort(key=lambda r: -(reserves.get(r) or 0))
+            if verbose and not upgraded:
+                print(f"[i] reserves lues : " + ", ".join(
+                    f"{k}={v}" for k, v in reserves.items()))
 
         paye = False
         for resource in [r for r in order if r not in epuisees]:

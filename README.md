@@ -92,11 +92,18 @@ les défenses. Le *dessus* des murs, en revanche, est d'un crème clair
 (240,224,192) qui forme de larges rubans que rien d'autre ne présente dans le
 village. Le mur choisi est confirmé par OCR du titre : « Rempart (Niveau 17) ».
 
+**Choisir la ressource.** Le programme lit l'or et l'élixir dans le bandeau et
+commence par la réserve la plus fournie. C'est le point qui change tout : un
+essai qui échoue ouvre la fenêtre d'achat de gemmes, et la refermer
+désélectionne le mur, si bien que la seconde tentative échouait à son tour.
+Viser juste du premier coup évite toute cette cascade. Le coût affiché sur les
+boutons serait plus précis, mais il est trop petit et trop mal contrasté pour
+être lu de façon fiable.
+
 **Payer.** « Améliorer » ouvre une fenêtre de confirmation, reconnue à son
 grand panneau de texte blanc (88 % de pixels blancs, contre moins de 5 %
-partout ailleurs). Si l'or ne suffit pas, le programme reprend le mur et
-retente en élixir, puis retient la ressource qui a marché pour les murs
-suivants.
+partout ailleurs). Une réserve refusée est retenue comme épuisée, et un mur
+raté ne condamne pas les suivants.
 
 **Attention aux gemmes.** Quand une ressource manque, le jeu propose d'acheter
 le complément contre des gemmes, avec un gros bouton vert au centre de l'écran.
