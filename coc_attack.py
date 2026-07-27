@@ -111,7 +111,19 @@ WALL_AREA_MIN = 400
 MENU_BOX = (900, 775, 1075, 915)
 MENU_WHITE_MIN = 20.0
 TITLE_BOX = (850, 690, 1600, 748)      # "Rempart (Niveau 17)"
-WALL_UPGRADE = {"or": (1410, 855), "elixir": (1620, 855)}
+
+# Boutons du menu d'un objet selectionne. Leurs positions ne sont pas fixes :
+# la rangee est centree, donc elle se decale des qu'un bouton manque, ce qui
+# arrive quand une reserve ne permet plus l'amelioration. Taper des
+# coordonnees figees revenait alors a cliquer a cote. On repere donc le bord
+# superieur des boutons (segments clairs bien nets vers y=790), puis la
+# ressource de chacun a son icone : piece jaune ou goutte violette, presentes
+# a 3.9 % et 5.9 % sur les deux boutons "Ameliorer" contre au plus 1.3 %
+# ailleurs.
+BUTTON_ROW_Y = (782, 798)
+BUTTON_MIN_W, BUTTON_MAX_W = 140, 215
+BUTTON_TAP_Y = 855
+ICON_MIN = 2.5
 # "Ameliorer" ouvre une fenetre de confirmation avant de debiter. Son grand
 # panneau de texte est presque entierement blanc (88 % contre moins de 5 %
 # partout ailleurs), ce qui la rend impossible a confondre.
@@ -738,6 +750,44 @@ def selected_title(img):
     return pytesseract.image_to_string(big, config="--psm 7").strip()
 
 
+def menu_buttons(img):
+    """Centres x des boutons du menu de l'objet selectionne."""
+    best = []
+    for y in range(BUTTON_ROW_Y[0], BUTTON_ROW_Y[1], 2):
+        lum = img[y:y + 3, 620:1820].mean(axis=(0, 2))
+        runs, start = [], None
+        for x, clair in enumerate(lum > 150):
+            if clair and start is None:
+                start = x
+            elif not clair and start is not None:
+                if BUTTON_MIN_W <= x - start <= BUTTON_MAX_W:
+                    runs.append(620 + (start + x) // 2)
+                start = None
+        if start is not None and BUTTON_MIN_W <= len(lum) - start <= BUTTON_MAX_W:
+            runs.append(620 + (start + len(lum)) // 2)
+        if len(runs) > len(best):
+            best = runs
+    return best
+
+
+def upgrade_buttons(img):
+    """Position des boutons "Ameliorer", par ressource.
+
+    Renvoie par exemple {"or": (1402, 855), "elixir": (1628, 855)}. Une
+    ressource absente signifie que le jeu ne propose pas cette amelioration.
+    """
+    trouves = {}
+    for cx in menu_buttons(img):
+        bandeau = img[750:798, cx + 35:cx + 125]
+        r, g, b = bandeau[:, :, 0], bandeau[:, :, 1], bandeau[:, :, 2]
+        piece = float(((r > 200) & (g > 150) & (g < 225) & (b < 110)).mean()) * 100
+        goutte = float(((r > 150) & (b > 150) & (g < 130)).mean()) * 100
+        if max(piece, goutte) < ICON_MIN:
+            continue
+        trouves["or" if piece > goutte else "elixir"] = (cx, BUTTON_TAP_Y)
+    return trouves
+
+
 def titre_est_rempart(titre):
     """Le titre lu designe-t-il un rempart ?
 
@@ -790,13 +840,19 @@ def pay_upgrade(phone, templates, resource):
     des gemmes. On ne clique jamais dans cette fenetre : le succes se juge au
     retour effectif au village, et on ressort au bouton retour.
     """
-    phone.tap(*WALL_UPGRADE[resource])
+    boutons = upgrade_buttons(phone.screenshot())
+    if resource not in boutons:
+        # Le jeu ne propose pas cette amelioration : mur au maximum, rangee
+        # deja en chantier, ou reserve trop juste.
+        print(f"    [{resource}] bouton absent du menu")
+        return False
+
+    phone.tap(*boutons[resource])
     time.sleep(1.5)
     img = phone.screenshot()
     if not confirm_dialog_open(img):
-        # Bouton indisponible : mur deja au maximum, rangee en cours, ou la
-        # ressource manque. Le jeu n'a simplement rien propose.
         print(f"    [{resource}] aucune fenetre de confirmation")
+        record_unknown(img, f"ameliorer-{resource}")
         return False
 
     x0, y0, x1, y1 = HUD_BOX
