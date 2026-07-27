@@ -98,8 +98,10 @@ UI_ZONES = [
 ]
 
 # Butin affiche en haut a gauche : or, elixir, elixir noir.
-LOOT_LINES = {"or": (148, 188), "elixir": (204, 244), "noir": (262, 302)}
-LOOT_X = (195, 430)
+LOOT_LINES = {"or": (148, 188), "elixir": (204, 244)}
+# Cadrage serre sur les chiffres : plus large, l'OCR mordait sur le decor du
+# village et ajoutait un chiffre parasite (1 466 348 lu 14663485).
+LOOT_X = (200, 380)
 
 # --- Amelioration des remparts, au village ---
 # Le village, hors barres d'interface. La limite basse s'arrete au-dessus de
@@ -351,27 +353,39 @@ def identify(img, templates):
 # --------------------------------------------------------------------------
 
 def read_loot(img):
-    """Lit or / elixir / elixir noir en haut a gauche. None si illisible.
+    """Lit l'or et l'elixir du village vise. None si la lecture est douteuse.
 
-    Les chiffres sont clairs et cernes de noir sur un fond quelconque : on
-    isole les pixels tres lumineux avant de passer a l'OCR.
+    Chaque ligne est lue trois fois, avec des seuils et des agrandissements
+    differents, et n'est retenue que si deux lectures concordent. Une lecture
+    unique se trompait parfois avec aplomb, en ajoutant un chiffre : 668 649
+    devenait 6 656 495, soit dix fois trop, et un village pauvre passait pour
+    riche. Un chiffre mal forme ne produit pas deux fois la meme erreur, si
+    bien que le desaccord signale le doute au lieu de le masquer.
     """
     try:
         import pytesseract
     except ImportError:
         return {}
 
+    x0, x1 = LOOT_X
     out = {}
-    for name, (y0, y1) in LOOT_LINES.items():
-        crop = img[y0:y1, LOOT_X[0]:LOOT_X[1]]
-        mask = (crop.min(axis=2) > 160).astype(np.uint8) * 255
-        big = Image.fromarray(255 - mask).resize(
-            ((LOOT_X[1] - LOOT_X[0]) * 6, (y1 - y0) * 6), Image.LANCZOS)
-        txt = pytesseract.image_to_string(
-            big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
-        digits = re.sub(r"\D", "", txt)
-        # Le butin depasse rarement 7 chiffres : au-dela, l'OCR a derape.
-        out[name] = int(digits) if digits and len(digits) <= 7 else None
+    for name in ("or", "elixir"):
+        y0, y1 = LOOT_LINES[name]
+        lectures = []
+        for seuil, echelle in ((160, 6), (175, 6), (160, 8)):
+            crop = img[y0:y1, x0:x1]
+            mask = (crop.min(axis=2) > seuil).astype(np.uint8) * 255
+            big = Image.fromarray(255 - mask).resize(
+                ((x1 - x0) * echelle, (y1 - y0) * echelle), Image.LANCZOS)
+            txt = pytesseract.image_to_string(
+                big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
+            chiffres = re.sub(r"\D", "", txt)
+            valeur = int(chiffres) if chiffres else None
+            lectures.append(valeur if (valeur or 0) <= 20_000_000 else None)
+        accord = lectures[0] if lectures.count(lectures[0]) >= 2 else None
+        if accord is None and lectures.count(lectures[1]) >= 2:
+            accord = lectures[1]
+        out[name] = accord
     return out
 
 
