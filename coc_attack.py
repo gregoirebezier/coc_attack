@@ -354,14 +354,14 @@ def identify(img, templates):
 # --------------------------------------------------------------------------
 
 def read_loot(img):
-    """Lit l'or et l'elixir du village vise. None si la lecture est douteuse.
+    """Lectures du butin, plusieurs par ressource.
 
-    Chaque ligne est lue trois fois, avec des seuils et des agrandissements
-    differents, et n'est retenue que si deux lectures concordent. Une lecture
-    unique se trompait parfois avec aplomb, en ajoutant un chiffre : 668 649
-    devenait 6 656 495, soit dix fois trop, et un village pauvre passait pour
-    riche. Un chiffre mal forme ne produit pas deux fois la meme erreur, si
-    bien que le desaccord signale le doute au lieu de le masquer.
+    Renvoie par exemple {"or": [1412423, 1412423, 1409423], "elixir": [...]}.
+    On ne cherche pas a trancher ici : une lecture unique se trompait parfois
+    avec aplomb, en ajoutant un chiffre, si bien que 668 649 devenait
+    6 656 495. Trois lectures menees avec des seuils differents ne commettent
+    pas la meme erreur, et c'est a la decision de dire si leur desaccord
+    l'empeche de conclure.
     """
     try:
         import pytesseract
@@ -370,8 +370,7 @@ def read_loot(img):
 
     x0, x1 = LOOT_X
     out = {}
-    for name in ("or", "elixir"):
-        y0, y1 = LOOT_LINES[name]
+    for name, (y0, y1) in LOOT_LINES.items():
         lectures = []
         for seuil, echelle in ((160, 6), (175, 6), (160, 8)):
             crop = img[y0:y1, x0:x1]
@@ -382,26 +381,42 @@ def read_loot(img):
                 big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
             chiffres = re.sub(r"\D", "", txt)
             valeur = int(chiffres) if chiffres else None
-            lectures.append(valeur if (valeur or 0) <= 20_000_000 else None)
-        accord = lectures[0] if lectures.count(lectures[0]) >= 2 else None
-        if accord is None and lectures.count(lectures[1]) >= 2:
-            accord = lectures[1]
-        out[name] = accord
+            if valeur is not None and valeur <= 20_000_000:
+                lectures.append(valeur)
+        out[name] = lectures
     return out
 
 
 def loot_is_good(loot, minimum):
-    """Village interessant si l'or OU l'elixir atteint le seuil.
+    """Ce village vaut-il l'attaque ?
 
-    Il suffit qu'une seule des deux valeurs soit illisible pour qu'on attaque :
-    la valeur manquante pourrait etre enorme, et passer un village a 2 millions
-    coute bien plus cher qu'une attaque sur un village pauvre.
+    Il ne s'agit pas de connaitre le butin au chiffre pres, mais de savoir de
+    quel cote du seuil il tombe. Des lectures qui divergent restent donc
+    exploitables tant qu'elles tombent toutes du meme cote, ce qui permet de
+    trancher bien plus souvent qu'en exigeant leur accord exact.
+
+    Quand elles l'encadrent, ou qu'aucune n'a abouti, on attaque : passer un
+    village correct coute plus cher qu'en attaquer un pauvre.
     """
-    vals = {k: loot.get(k) for k in ("or", "elixir")}
-    detail = f"or={vals['or']} elixir={vals['elixir']}"
-    if any(v is None for v in vals.values()):
-        return True, detail + " (lecture incomplete, on attaque)"
-    return max(vals.values()) >= minimum, detail
+    detail, riche, pauvre = [], False, True
+    for nom in ("or", "elixir"):
+        lectures = loot.get(nom) or []
+        if not lectures:
+            detail.append(f"{nom}=?")
+            pauvre = False
+            continue
+        bas, haut = min(lectures), max(lectures)
+        detail.append(f"{nom}={bas}" if bas == haut else f"{nom}={bas}~{haut}")
+        if bas >= minimum:
+            riche = True
+        elif haut >= minimum:
+            pauvre = False      # le seuil tombe entre deux lectures
+    texte = " ".join(detail)
+    if riche:
+        return True, texte
+    if pauvre:
+        return False, texte
+    return True, texte + " (lecture douteuse, on attaque)"
 
 
 # --------------------------------------------------------------------------
