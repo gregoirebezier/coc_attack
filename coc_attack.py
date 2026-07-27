@@ -829,6 +829,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # secondes, alors on retient celle qui vient de marcher et on relegue celle
     # qui manque.
     order = ["or", "elixir"]
+    epuisees = set()        # reserves dont le paiement a deja ete refuse
     for _ in range(args.walls * 3):
         if upgraded >= args.walls:
             break
@@ -850,11 +851,21 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             shot = phone.screenshot() if shot is None else shot
             return menu_open(shot) and titre_est_rempart(selected_title(shot))
 
-        def select():
-            """Selectionne le mur vise et confirme que c'en est bien un."""
-            phone.tap(*point)
-            time.sleep(1.2)
-            return is_wall_selected()
+        def select(essais=2):
+            """Selectionne le mur vise et confirme que c'en est bien un.
+
+            On reessaie une fois : quand la selection suit la fermeture d'une
+            fenetre, le jeu est encore en train de l'escamoter et avale le
+            premier tap. C'est ce qui faisait renoncer a l'essai en elixir
+            juste apres un refus en or.
+            """
+            for essai in range(essais):
+                phone.tap(*point)
+                time.sleep(1.2)
+                if is_wall_selected():
+                    return True
+                time.sleep(0.8)     # laisser l'animation se terminer
+            return False
 
         if not select():
             # Le tap a manque le mur. S'il n'a rien selectionne du tout, il ne
@@ -866,7 +877,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             continue
 
         paye = False
-        for resource in list(order):
+        for resource in [r for r in order if r not in epuisees]:
             # Selon la facon dont l'essai precedent s'est termine, le mur est
             # encore selectionne ou non. Retaper un mur deja selectionne le
             # deselectionne : il faut donc verifier avant, pas re-cliquer a
@@ -881,12 +892,17 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 if verbose:
                     print(f"[+] rempart ameliore en {resource}")
                 break
+            # Le paiement a ete refuse : cette reserve ne suffit plus, et elle
+            # ne remontera pas d'ici la fin de la serie. Inutile de la
+            # represser mur apres mur, chaque essai coutant une quinzaine de
+            # secondes et laissant le mur deselectionne.
+            epuisees.add(resource)
             order.remove(resource)
             order.append(resource)
         if not paye:
-            # Ni l'or ni l'elixir ne suffisent : inutile d'essayer un autre mur.
             if verbose:
-                print("[i] ressources insuffisantes pour ameliorer")
+                manquantes = ", ".join(sorted(epuisees)) or "aucune ressource"
+                print(f"[i] plus assez de {manquantes} pour ameliorer")
             break
 
     back_to_home(phone, templates)
