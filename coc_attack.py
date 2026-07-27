@@ -79,6 +79,7 @@ BADGE_MIN = 15.0
 # ~11, carte videe 60-88. On se cale juste au-dessus du bruit, sinon le
 # sondage (qui ne sort qu'une unite a la fois) ne detecte plus rien.
 CARD_CHANGED_MAD = 4.0
+IDLE_ABANDON = 4         # passes sans effet avant d'abandonner un slot
 
 PLAY_AREA = (0, 0, 2400, 870)     # zone de jeu, au-dessus de la barre de troupes
 # Zone de largage des sorts : large, pour les disperser sur tout le village
@@ -494,7 +495,34 @@ def find_slots(img):
                 start = None
         if len(runs) > len(best):
             best = runs
-    return best
+    return sans_fantomes(best)
+
+
+def sans_fantomes(xs):
+    """Ecarte les faux slots detectes a cote de la barre.
+
+    Le decor du village se voit par transparence derriere la barre de troupes
+    et produit parfois un segment clair de la bonne largeur, juste a gauche de
+    la premiere carte. Le programme le prenait pour un slot, tentait d'y
+    deployer et n'obtenait evidemment rien : une attaque s'est terminee a neuf
+    slots sur dix apres six passes perdues sur ce fantome.
+
+    Les vraies cartes sont regulierement espacees, avec un ecart un peu plus
+    grand entre familles. Un voisin nettement trop proche n'en est donc pas
+    une.
+    """
+    if len(xs) < 3:
+        return xs
+    ecarts = sorted(xs[i + 1] - xs[i] for i in range(len(xs) - 1))
+    median = ecarts[len(ecarts) // 2]
+    garde = []
+    for i, x in enumerate(xs):
+        voisin = xs[i + 1] - x if i + 1 < len(xs) else median
+        precedent = x - xs[i - 1] if i else median
+        if voisin < 0.85 * median and precedent >= 0.85 * median:
+            continue        # colle a la carte suivante : c'est le fantome
+        garde.append(x)
+    return garde
 
 
 def card(img, cx):
@@ -809,6 +837,14 @@ def deploy_all(phone, templates, args, rng, verbose=True):
                 idle[cx] += 1
                 if verbose and idle[cx] == 1:
                     print(f"    slot x={cx} sans effet, changement de point")
+                # Une pile de troupes finit toujours par bouger si on change de
+                # point de largage. Apres plusieurs passes sans le moindre
+                # effet, c'est que ce slot ne repond pas du tout : insister
+                # coutait six passes sur une seule attaque.
+                if idle[cx] >= IDLE_ABANDON:
+                    done.add(cx)
+                    if verbose:
+                        print(f"    slot x={cx} sans reponse, abandonne")
             prev[cx] = now
 
         if verbose:
@@ -921,7 +957,34 @@ def menu_buttons(img):
             runs.append(620 + (start + len(lum)) // 2)
         if len(runs) > len(best):
             best = runs
-    return best
+    return sans_fantomes(best)
+
+
+def sans_fantomes(xs):
+    """Ecarte les faux slots detectes a cote de la barre.
+
+    Le decor du village se voit par transparence derriere la barre de troupes
+    et produit parfois un segment clair de la bonne largeur, juste a gauche de
+    la premiere carte. Le programme le prenait pour un slot, tentait d'y
+    deployer et n'obtenait evidemment rien : une attaque s'est terminee a neuf
+    slots sur dix apres six passes perdues sur ce fantome.
+
+    Les vraies cartes sont regulierement espacees, avec un ecart un peu plus
+    grand entre familles. Un voisin nettement trop proche n'en est donc pas
+    une.
+    """
+    if len(xs) < 3:
+        return xs
+    ecarts = sorted(xs[i + 1] - xs[i] for i in range(len(xs) - 1))
+    median = ecarts[len(ecarts) // 2]
+    garde = []
+    for i, x in enumerate(xs):
+        voisin = xs[i + 1] - x if i + 1 < len(xs) else median
+        precedent = x - xs[i - 1] if i else median
+        if voisin < 0.85 * median and precedent >= 0.85 * median:
+            continue        # colle a la carte suivante : c'est le fantome
+        garde.append(x)
+    return garde
 
 
 def cost_affordable(img, cx):
