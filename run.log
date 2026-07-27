@@ -1,0 +1,28 @@
+
+########## Attaque 1/100 ##########
+=== Recherche d'un adversaire ===
+[i] village retenu (or=1223182 elixir=1283796)
+=== Deploiement (cote all) ===
+[i] 5 points sondes -> 10 points de largage : (336,278), (436,188), (624,121), (1405,175), (2112,278), (2156,437), (2112,591), (1245,631), (336,591), (291,438)
+[i] slots : tr, tr, he, he, he, he, he, so, so
+    passe 1 : 1/9 slots vides, restants [444, 762, 913, 1058, 1203, 1348, 1511, 1656]
+    passe 2 : 8/9 slots vides, restants [1656]
+    passe 3 : 9/9 slots vides
+[+] 9/9 slots vides
+=== Combat en cours (max 210s) ===
+[+] rentre au village
+=== Remparts (max 5) ===
+[+] rempart ameliore en or
+[+] rempart ameliore en elixir
+[i] ressources insuffisantes pour ameliorer
+[+] 2 rempart(s) ameliore(s)
+
+########## Attaque 2/100 ##########
+=== Recherche d'un adversaire ===
+[>] home
+[>] menu
+[>] army
+[i] village retenu (or=1432628 elixir=1836809)
+=== Deploiement (cote all) ===
+[i] 6 points sondes -> 11 points de largage : (336,278), (435,192), (624,121), (1196,76), (1776,121), (2112,278), (2156,440), (2112,591), (1225,636), (336,591), (291,440)
+[i] slots : tr, tr, he, he, he, he, he, so, so
