@@ -238,11 +238,20 @@ def record_unknown(img, tag, limit=300):
 
 
 def identify(img, templates):
-    """Renvoie (nom_ecran, score) du meilleur template, ou (None, score)."""
+    """Renvoie (nom_ecran, score) du meilleur template, ou (None, score).
+
+    La comparaison est centree sur la moyenne : le jeu assombrit tout l'ecran
+    pendant les fondus entre deux vues, et le village en plein fondu manquait
+    de peu le seuil (41.9 pour 40). En annulant l'ecart de luminosite globale
+    il retombe a 32.9, loin devant le suivant (62.9) : la marge redevient
+    confortable sans rapprocher les ecrans entre eux.
+    """
     best, best_score = None, 1e9
     for name, cfg in SCREENS.items():
         x0, y0, x1, y1 = cfg["box"]
-        score = float(np.abs(img[y0:y1, x0:x1] - templates[name]).mean())
+        region = img[y0:y1, x0:x1]
+        tpl = templates[name]
+        score = float(np.abs((region - region.mean()) - (tpl - tpl.mean())).mean())
         if score < best_score:
             best, best_score = name, score
     return (best, best_score) if best_score < MATCH_THRESHOLD else (None, best_score)
