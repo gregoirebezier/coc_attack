@@ -97,7 +97,8 @@ UI_ZONES = [
     (0, 0, 540, 120),        # nom du defenseur
 ]
 
-# Butin affiche en haut a gauche : or, elixir, elixir noir.
+# Butin affiche en haut a gauche. L elixir noir n entre pas dans la decision
+# et n est donc pas lu.
 LOOT_LINES = {"or": (148, 188), "elixir": (204, 244)}
 # Cadrage serre sur les chiffres : plus large, l'OCR mordait sur le decor du
 # village et ajoutait un chiffre parasite (1 466 348 lu 14663485).
