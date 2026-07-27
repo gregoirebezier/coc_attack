@@ -236,11 +236,13 @@ def load_templates():
 UNKNOWN_DIR = None      # dossier d'archivage des ecrans non reconnus
 _unknown_seen = {}
 
-# Entre deux vues, le jeu passe par un fondu au blanc ou l'image se delave
-# presque entierement. Ces images ne correspondent a aucun ecran, mais ce ne
-# sont pas des imprevus : il faut simplement attendre, pas appuyer sur retour.
-# Mesures : ecart-type de 6 sur un fondu, de 54 a 86 sur tout ecran reel.
-TRANSITION_STD_MAX = 25.0
+# Entre deux vues, le jeu passe par un fondu au blanc ou l'image se delave.
+# Ces images ne correspondent a aucun ecran, mais ce ne sont pas des imprevus :
+# il faut simplement attendre, pas appuyer sur retour. Le delavage est
+# progressif : de 6 au plus fort du fondu a 26 quand le decor reapparait,
+# contre 57 a 86 sur tout ecran reel. Le seuil se place dans cet ecart, assez
+# haut pour couvrir toute la transition sans jamais mordre sur un vrai ecran.
+TRANSITION_STD_MAX = 40.0
 
 
 def is_transition(img):
