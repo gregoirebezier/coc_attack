@@ -1346,9 +1346,9 @@ def main():
                    help="nb max de passes de deploiement (defaut: 8)")
     p.add_argument("--spell-taps", type=int, default=8,
                    help="taps par passe pour les sorts (defaut: 8)")
-    p.add_argument("--min-loot", type=int, default=900000,
+    p.add_argument("--min-loot", type=int, default=1500000,
                    help="or OU elixir minimum, sinon on passe au village suivant "
-                        "(0 pour desactiver, defaut: 900000)")
+                        "(0 pour desactiver, defaut: 1500000)")
     p.add_argument("--max-skips", type=int, default=8,
                    help="nb max de villages passes d'affilee (defaut: 8)")
     p.add_argument("--max-battle", type=int, default=210,
