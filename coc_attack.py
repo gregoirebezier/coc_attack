@@ -26,6 +26,7 @@ Usage :
 """
 
 import argparse
+import json
 import os
 import random
 import math
@@ -114,6 +115,12 @@ WALL_CREAM = dict(r_min=215, g_min=198, b_min=165, rb_min=28, rb_max=80, rg_max=
 WALL_GOLD = dict(r_min=215, g_min=195, b_max=125, rb_min=130, rg_max=45)
 WALL_AREA_MIN = 400
 WALL_MIN_RATIO = 1.8     # allongement minimal pour distinguer un mur d'un toit
+# Le village ne bouge pas d'une attaque a l'autre : ce que l'on a identifie une
+# fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
+# ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
+# pour ne plus y revenir. Chaque essai inutile coute cinq secondes.
+WALL_CACHE = os.path.join(HERE, "walls.json")
+WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
 MENU_BOX = (900, 775, 1075, 915)
@@ -771,6 +778,29 @@ def wall_candidates(img):
     return [(cent[i][0] + x0, cent[i][1] + y0) for i in keep]
 
 
+def load_wall_cache():
+    try:
+        with open(WALL_CACHE) as f:
+            data = json.load(f)
+        return [tuple(p) for p in data.get("murs", [])], \
+               [tuple(p) for p in data.get("autres", [])]
+    except (OSError, ValueError):
+        return [], []
+
+
+def save_wall_cache(murs, autres):
+    try:
+        with open(WALL_CACHE, "w") as f:
+            json.dump({"murs": [list(p) for p in murs[-400:]],
+                       "autres": [list(p) for p in autres[-400:]]}, f)
+    except OSError:
+        pass
+
+
+def proche(point, liste, seuil=WALL_SAME_POINT):
+    return any(math.dist(point, q) <= seuil for q in liste)
+
+
 def menu_open(img):
     """Un objet est-il selectionne ? La rangee de boutons se remplit de texte."""
     x0, y0, x1, y1 = MENU_BOX
@@ -986,6 +1016,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # qui manque.
     order = ["or", "elixir"]
     epuisees = set()        # reserves dont le paiement a deja ete refuse
+    connus, ecartes = load_wall_cache()
     for _ in range(args.walls * 3):
         if upgraded >= args.walls:
             break
@@ -993,8 +1024,11 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         if identify(img, templates)[0] != "home":
             break
 
-        cands = [p for p in wall_candidates(img)
-                 if all(math.dist(p, q) > 40 for q in tried)]
+        # Les points deja reconnus comme remparts passent devant ; ceux ou
+        # l'on est tombe sur autre chose sont ecartes d'office.
+        detectes = [p for p in wall_candidates(img) if not proche(p, ecartes)]
+        cands = [p for p in connus if not proche(p, tried)] + \
+                [p for p in detectes if not proche(p, tried) and not proche(p, connus)]
         if not cands:
             if verbose:
                 print("[i] plus de rempart a ameliorer")
@@ -1026,6 +1060,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             return False
 
         if not select():
+            # Ce point n'est pas un rempart : on ne l'essaiera plus.
+            if not proche(point, ecartes):
+                ecartes.append(point)
             if verbose:
                 shot = phone.screenshot()
                 print(f"    mur ({int(point[0])},{int(point[1])}) non selectionne "
@@ -1041,6 +1078,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # Le prix rouge est lu dans pay_upgrade, une fois le mur selectionne :
         # hors de son menu, les boutons n'existent pas et l'information n'est
         # pas disponible.
+        if not proche(point, connus):
+            connus.append(point)     # ce point repond bien comme un rempart
+
         paye = False
         for resource in [r for r in order if r not in epuisees]:
             # Selon la facon dont l'essai precedent s'est termine, le mur est
@@ -1087,6 +1127,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             time.sleep(1.0)     # laisser le jeu se stabiliser
             continue
 
+    save_wall_cache(connus, ecartes)
+    if verbose:
+        print(f"[i] repere : {len(connus)} remparts connus, {len(ecartes)} points ecartes")
     back_to_home(phone, templates)
     return upgraded
 
