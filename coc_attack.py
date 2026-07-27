@@ -101,11 +101,16 @@ LOOT_LINES = {"or": (148, 188), "elixir": (204, 244), "noir": (262, 302)}
 LOOT_X = (195, 430)
 
 # --- Amelioration des remparts, au village ---
-VILLAGE_AREA = (300, 130, 2120, 820)   # le village, hors barres d'interface
+# Le village, hors barres d'interface. La limite basse s'arrete au-dessus de
+# la rangee de boutons d'un objet selectionne : leur fond clair passait pour
+# des remparts, et comme ce sont les plus grosses taches de l'image, le
+# programme cliquait sur ses propres boutons au lieu d'un mur.
+VILLAGE_AREA = (300, 130, 2120, 740)
 # Le dessus des remparts est d'un creme clair tres reconnaissable (240,224,192),
 # la ou les batiments sont gris, bleus ou sombres.
 WALL_CREAM = dict(r_min=215, g_min=198, b_min=165, rb_min=28, rb_max=80, rg_max=32)
 WALL_AREA_MIN = 400
+WALL_MIN_RATIO = 1.8     # allongement minimal pour distinguer un mur d'un toit
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
 MENU_BOX = (900, 775, 1075, 915)
@@ -744,7 +749,17 @@ def wall_candidates(img):
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,
                             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
     n, _lab, stats, cent = cv2.connectedComponentsWithStats(mask, 8)
-    keep = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > WALL_AREA_MIN]
+    keep = []
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] <= WALL_AREA_MIN:
+            continue
+        w, h = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+        # Un rempart est un ruban : long dans un sens, mince dans l'autre. Un
+        # toit de batiment, lui, est trapu. Ce seul critere ecarte l'essentiel
+        # des batiments clairs, que le controle du titre rejetait ensuite au
+        # prix de plusieurs secondes perdues a chaque fois.
+        if max(w, h) / max(1, min(w, h)) >= WALL_MIN_RATIO:
+            keep.append(i)
     keep.sort(key=lambda i: -stats[i, cv2.CC_STAT_AREA])
     return [(cent[i][0] + x0, cent[i][1] + y0) for i in keep]
 
@@ -977,8 +992,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             if verbose:
                 print("[i] plus de rempart a ameliorer")
             break
-        # On pioche parmi les plus gros rubans, sans toujours prendre le meme.
-        point = rng.choice(cands[:max(1, min(len(cands), 8))])
+        # On pioche parmi tous les murs reperes, et non parmi les plus gros :
+        # se limiter aux premiers revenait a remonter sans cesse les memes
+        # remparts en laissant les autres au niveau d'origine.
+        point = rng.choice(cands)
         tried.add(point)
 
         def is_wall_selected(shot=None):
