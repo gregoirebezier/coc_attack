@@ -969,6 +969,38 @@ def one_round(phone, templates, args, rng):
     return True
 
 
+def source_mtime():
+    return os.path.getmtime(os.path.abspath(__file__))
+
+
+def relance_si_code_modifie(depart, restantes):
+    """Redemarre le programme si son source a change depuis le lancement.
+
+    Python ne recharge pas un module deja en memoire : sans cela, une
+    correction n'est prise en compte qu'en tuant le processus, ce qui gache
+    l'attaque en cours. On ne se relance donc qu'entre deux attaques, jamais
+    pendant un combat, en reportant le nombre d'attaques restantes.
+    """
+    if restantes <= 0 or source_mtime() == depart:
+        return
+    argv, saute = [], False
+    for a in sys.argv[1:]:
+        if saute:
+            saute = False
+            continue
+        if a == "--rounds":
+            saute = True
+            continue
+        if a.startswith("--rounds="):
+            continue
+        argv.append(a)
+    print(f"[i] code mis a jour : relance pour les {restantes} attaques restantes",
+          flush=True)
+    os.execv(sys.executable,
+             [sys.executable, "-u", os.path.abspath(__file__),
+              *argv, "--rounds", str(restantes)])
+
+
 def main():
     p = argparse.ArgumentParser(description="Attaque automatique Clash of Clans")
     p.add_argument("--device", help="identifiant ADB du telephone")
@@ -1033,6 +1065,7 @@ def main():
         time.sleep(15)
 
     echecs = 0
+    mtime_depart = source_mtime()
     for n in range(1, args.rounds + 1):
         print(f"\n########## Attaque {n}/{args.rounds} ##########")
         try:
@@ -1056,6 +1089,7 @@ def main():
                 print("[!] cinq echecs consecutifs, arret")
                 break
         if n < args.rounds:
+            relance_si_code_modifie(mtime_depart, args.rounds - n)
             time.sleep(3)
 
     print("\nTermine.")

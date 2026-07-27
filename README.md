@@ -145,6 +145,17 @@ sondage volontairement court (une poignée de couloirs) complété par géométr
 
 Sur une attaque réelle : ~8 s de sondage, ~23 s de déploiement.
 
+## Mise à jour à chaud
+
+Python ne recharge pas un module déjà en mémoire : corriger le fichier pendant
+qu'une série tourne ne change rien au processus en cours. Le programme
+surveille donc la date de son propre source et se relance lui-même **entre
+deux attaques**, jamais pendant un combat, en reportant le nombre d'attaques
+restantes.
+
+Concrètement : on modifie `coc_attack.py`, et la correction s'applique à
+l'attaque suivante sans rien arrêter et sans gâcher celle en cours.
+
 ## Limites connues
 
 - Les coordonnées sont calibrées pour un écran 2400x1080 en paysage. Une autre
