@@ -57,7 +57,7 @@ SCREENS = {
                 "templates": ["battle", "battle_capituler"]},
     "result":  {"box": (1120, 890, 1285, 962),  "tap": (1200, 924)},  # "Rentrer"
 }
-MATCH_THRESHOLD = 40.0    # MAD max pour considerer un ecran reconnu
+MATCH_THRESHOLD = 25.0   # score max pour considerer un ecran reconnu
 
 NEXT_BUTTON = (2120, 770)  # "Suivant" : passe au village suivant
 
@@ -305,16 +305,23 @@ def identify(img, templates):
     # A verifier avant les templates : ce dialogue laisse le village visible
     # derriere lui et passe pour l'ecran d'accueil (score 37.6 pour un seuil
     # a 40), ce qui ferait agir a l'aveugle par-dessus.
+    # Ces deux fenetres assombrissent le village sans le masquer : en annulant
+    # l'ecart de luminosite, la comparaison les prend pour l'ecran d'accueil.
+    # Elles sont donc reconnues a leur contenu propre, avant les templates.
     if quit_dialog_open(img):
         return "quit", 0.0
+    if confirm_dialog_open(img):
+        return "confirm", 0.0
 
     best, best_score = None, 1e9
     for name, cfg in SCREENS.items():
         x0, y0, x1, y1 = cfg["box"]
-        region = img[y0:y1, x0:x1]
-        centree = region - region.mean()
+        region = img[y0:y1, x0:x1].astype(np.float32)
+        reduite = (region - region.mean()) / max(float(region.std()), 1.0)
         for tpl in templates[name]:
-            score = float(np.abs(centree - (tpl - tpl.mean())).mean())
+            tpl = tpl.astype(np.float32)
+            ref = (tpl - tpl.mean()) / max(float(tpl.std()), 1.0)
+            score = float(np.abs(reduite - ref).mean()) * 50
             if score < best_score:
                 best, best_score = name, score
     return (best, best_score) if best_score < MATCH_THRESHOLD else (None, best_score)
