@@ -1278,6 +1278,13 @@ def pick_village(phone, templates, args):
         img = phone.screenshot()
         loot = read_loot(img)
         good, detail = loot_is_good(loot, args.min_loot)
+        if good and "douteuse" in detail:
+            # L'affichage du butin se met en place avec un temps de retard :
+            # une seconde lecture leve souvent le doute, et evite d'attaquer
+            # un village pauvre par prudence.
+            time.sleep(1.2)
+            loot = read_loot(phone.screenshot())
+            good, detail = loot_is_good(loot, args.min_loot)
         if good or args.min_loot <= 0:
             print(f"[i] village retenu ({detail})")
             return True
