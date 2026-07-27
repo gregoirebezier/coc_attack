@@ -50,7 +50,11 @@ SCREENS = {
     "home":    {"box": (150, 880, 320, 1050),   "tap": (234, 966)},   # "Attaquer"
     "menu":    {"box": (330, 745, 545, 840),    "tap": (436, 792)},   # "Trouver une partie"
     "army":    {"box": (1870, 940, 2045, 1012), "tap": (1956, 976)},  # "Attaquer" vert
-    "battle":  {"box": (150, 775, 350, 845),    "tap": (246, 808)},   # "Terminer la bataille"
+    # Le bouton rouge en bas a gauche change de libelle une fois les troupes
+    # posees : "Terminer la bataille" devient "Capituler". Meme position, mais
+    # deux images differentes (57.8 d'ecart), d'ou les deux variantes.
+    "battle":  {"box": (150, 775, 350, 845),    "tap": (246, 808),
+                "templates": ["battle", "battle_capituler"]},
     "result":  {"box": (1120, 890, 1285, 962),  "tap": (1200, 924)},  # "Rentrer"
 }
 MATCH_THRESHOLD = 40.0    # MAD max pour considerer un ecran reconnu
@@ -204,12 +208,16 @@ class Phone:
 # --------------------------------------------------------------------------
 
 def load_templates():
+    """Charge les imagettes de reference, une ou plusieurs par ecran."""
     tpl = {}
-    for name in SCREENS:
-        path = os.path.join(TEMPLATE_DIR, f"{name}.png")
-        if not os.path.exists(path):
-            sys.exit(f"Template manquant : {path}")
-        tpl[name] = np.asarray(Image.open(path).convert("RGB")).astype(np.int16)
+    for name, cfg in SCREENS.items():
+        variantes = []
+        for fichier in cfg.get("templates", [name]):
+            path = os.path.join(TEMPLATE_DIR, f"{fichier}.png")
+            if not os.path.exists(path):
+                sys.exit(f"Template manquant : {path}")
+            variantes.append(np.asarray(Image.open(path).convert("RGB")).astype(np.int16))
+        tpl[name] = variantes
     return tpl
 
 
@@ -261,10 +269,11 @@ def identify(img, templates):
     for name, cfg in SCREENS.items():
         x0, y0, x1, y1 = cfg["box"]
         region = img[y0:y1, x0:x1]
-        tpl = templates[name]
-        score = float(np.abs((region - region.mean()) - (tpl - tpl.mean())).mean())
-        if score < best_score:
-            best, best_score = name, score
+        centree = region - region.mean()
+        for tpl in templates[name]:
+            score = float(np.abs(centree - (tpl - tpl.mean())).mean())
+            if score < best_score:
+                best, best_score = name, score
     return (best, best_score) if best_score < MATCH_THRESHOLD else (None, best_score)
 
 
