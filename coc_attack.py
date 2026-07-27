@@ -353,25 +353,35 @@ def identify(img, templates):
 # Butin
 # --------------------------------------------------------------------------
 
-def compte_chiffres(img, y0, y1, seuil=160):
+def compte_chiffres(img, y0, y1):
     """Nombre de chiffres visibles sur une ligne de butin.
 
     Les chiffres du jeu ne se touchent pas : chaque colonne claire isolee en
     est un. Ce comptage ne depend pas de l'OCR et permet de rejeter ses
     lectures d'une longueur impossible, comme ce 668 649 rendu en sept
     chiffres.
+
+    Le fond varie d'un village a l'autre, et un seuil unique laissait
+    parfois la ligne entierement vide. On compte donc a plusieurs seuils et
+    on retient le decompte le plus frequent, en ignorant les seuils muets.
     """
     x0, x1 = LOOT_X
-    colonnes = (img[y0:y1, x0:x1].min(axis=2) > seuil).any(axis=0)
-    n, largeur = 0, 0
-    for pleine in colonnes:
-        if pleine:
-            largeur += 1
-        else:
-            if largeur >= 8:
-                n += 1
-            largeur = 0
-    return n + 1 if largeur >= 8 else n
+    comptes = []
+    for seuil in (150, 165, 180, 195):
+        colonnes = (img[y0:y1, x0:x1].min(axis=2) > seuil).any(axis=0)
+        n, largeur = 0, 0
+        for pleine in colonnes:
+            if pleine:
+                largeur += 1
+            else:
+                if largeur >= 8:
+                    n += 1
+                largeur = 0
+        if largeur >= 8:
+            n += 1
+        if n:
+            comptes.append(n)
+    return max(set(comptes), key=comptes.count) if comptes else 0
 
 
 def read_loot(img):
