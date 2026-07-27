@@ -25,9 +25,20 @@ RESUME_TOUS = 10         # frequence des points de situation, en attaques
 
 
 def programme_tourne():
+    """Le programme est-il en cours ?
+
+    On ne cherche pas la ligne de commande exacte : en se relancant pour
+    prendre une correction, le programme reconstruit ses arguments dans un
+    autre ordre. Chercher "coc_attack.py --rounds" tel quel faisait alors
+    croire a un arret alors qu'il tournait toujours.
+    """
     out = subprocess.run(["ps", "-eo", "pid,cmd"], capture_output=True, text=True).stdout
-    return any("coc_attack.py --rounds" in l and "grep" not in l
-               for l in out.splitlines())
+    for ligne in out.splitlines():
+        if "grep" in ligne or "watch.py" in ligne:
+            continue
+        if "coc_attack.py" in ligne and "--rounds" in ligne:
+            return True
+    return False
 
 
 def emet(msg):
@@ -42,6 +53,7 @@ def main():
     remparts = 0
     derniere_ligne = time.time()
     silence_signale = False
+    absences = 0
 
     with open(LOG, "r", errors="replace") as f:
         f.seek(0, os.SEEK_END)
@@ -50,10 +62,18 @@ def main():
 
             if not ligne:
                 # Rien de neuf : le programme est-il encore la, et avance-t-il ?
-                if not programme_tourne():
-                    emet(f"PROGRAMME ARRETE apres {faites} attaque(s) terminee(s) "
-                         f"({troupes_ok} deploiements complets, {remparts} remparts)")
-                    return
+                if programme_tourne():
+                    absences = 0
+                else:
+                    # Le programme se remplace lui-meme quand il recharge une
+                    # correction : il est brievement invisible. On ne conclut
+                    # a l'arret qu'apres plusieurs constats.
+                    absences += 1
+                    if absences >= 5:
+                        emet(f"PROGRAMME ARRETE apres {faites} attaque(s) terminee(s) "
+                             f"({troupes_ok} deploiements complets, "
+                             f"{remparts} remparts)")
+                        return
                 mute = time.time() - derniere_ligne
                 if mute > SILENCE_MAX and not silence_signale:
                     emet(f"FIGE : aucune ligne depuis {int(mute // 60)} min "
