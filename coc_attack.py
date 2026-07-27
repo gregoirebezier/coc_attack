@@ -621,7 +621,16 @@ def deploy_all(phone, templates, args, rng, verbose=True):
         print("[!] aucun slot de troupes detecte")
         return 0, 0
 
-    first = next((cx for cx in slots if not card_empty(img, cx)), None)
+    # Le sondage doit se faire avec une pile de troupes, jamais avec un heros :
+    # un heros ne sort qu'une fois, si bien que le premier point accepte epuise
+    # la carte et que le sondage s'arrete la, souvent sans avoir rien trouve.
+    # Le deck ne commence pas toujours par une troupe, d'ou ce tri.
+    kinds_init = classify_slots(img, slots)
+    dispo = [cx for cx, k in zip(slots, kinds_init)
+             if k == "troupe" and not card_empty(img, cx)]
+    if not dispo:
+        dispo = [cx for cx in slots if not card_empty(img, cx)]
+    first = dispo[0] if dispo else None
     if first is None:
         return 0, len(slots)
 
