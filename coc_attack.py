@@ -830,6 +830,10 @@ def back_to_home(phone, templates, tries=4):
             phone.tap(*QUIT_CANCEL)
             time.sleep(1.2)
             continue
+        if ecran == "confirm":
+            phone.back()        # fenetre d'amelioration : on la referme
+            time.sleep(1.2)
+            continue
         if is_transition(img):
             time.sleep(1.0)     # fondu : rien a refermer, il faut attendre
             continue
@@ -1000,6 +1004,12 @@ def goto_battle(phone, templates, timeout=150):
             phone.tap(*QUIT_CANCEL)
             time.sleep(1.2)
             continue
+        if screen == "confirm":
+            # Fenetre d'amelioration restee ouverte : elle n'a rien a faire
+            # ici, on la referme sans y toucher.
+            phone.back()
+            time.sleep(1.2)
+            continue
         if screen is None:
             if is_transition(img):
                 time.sleep(0.8)     # fondu en cours : laisser l'ecran arriver
@@ -1068,6 +1078,10 @@ def end_battle(phone, templates, args):
             continue
         if screen == "quit":
             phone.tap(*QUIT_CANCEL)
+            time.sleep(1.2)
+            continue
+        if screen == "confirm":
+            phone.back()
             time.sleep(1.2)
             continue
         if is_transition(img):
