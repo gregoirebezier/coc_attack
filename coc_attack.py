@@ -980,10 +980,22 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             order.remove(resource)
             order.append(resource)
         if not paye:
+            # Un mur rate ne condamne pas les suivants. Un refus en or referme
+            # la fenetre d'achat de gemmes, ce qui deselectionne le mur : la
+            # tentative en elixir sur ce mur-la echouait donc aussi, et sortir
+            # de la boucle ici revenait a ne jamais essayer l'elixir, meme avec
+            # des dizaines de millions en reserve. On passe au mur suivant,
+            # cette fois en commencant par la ressource qui reste.
+            if len(epuisees) >= len(order):
+                if verbose:
+                    print(f"[i] plus assez de {' ni de '.join(sorted(epuisees))}"
+                          " pour ameliorer")
+                break
             if verbose:
-                manquantes = ", ".join(sorted(epuisees)) or "aucune ressource"
-                print(f"[i] plus assez de {manquantes} pour ameliorer")
-            break
+                print(f"[i] echec sur ce mur, on en essaie un autre "
+                      f"(reste : {', '.join(r for r in order if r not in epuisees)})")
+            time.sleep(1.0)     # laisser le jeu se stabiliser
+            continue
 
     back_to_home(phone, templates)
     return upgraded
