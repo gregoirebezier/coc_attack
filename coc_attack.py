@@ -1099,6 +1099,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     order = ["or", "elixir"]
     epuisees = set()        # reserves dont le paiement a deja ete refuse
     connus, ecartes = load_wall_cache()
+    suspects = []     # points ayant echoue une fois, pas encore ecartes
     for _ in range(args.walls * 3):
         if upgraded >= args.walls:
             break
@@ -1142,9 +1143,15 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             return False
 
         if not select():
-            # Ce point n'est pas un rempart : on ne l'essaiera plus.
-            if not proche(point, ecartes):
-                ecartes.append(point)
+            # Un point n'est ecarte qu'apres deux echecs : une selection peut
+            # rater pour une raison passagere, une animation en cours par
+            # exemple, et bannir un vrai rempart des le premier essai
+            # appauvrirait le vivier nuit apres nuit.
+            if proche(point, suspects):
+                if not proche(point, ecartes):
+                    ecartes.append(point)
+            else:
+                suspects.append(point)
             if verbose:
                 shot = phone.screenshot()
                 print(f"    mur ({int(point[0])},{int(point[1])}) non selectionne "
