@@ -902,7 +902,7 @@ def pay_upgrade(phone, templates, resource):
         # Le jeu ne propose pas cette amelioration : mur au maximum, rangee
         # deja en chantier, ou reserve trop juste.
         print(f"    [{resource}] bouton absent du menu")
-        return False
+        return "indisponible"
 
     phone.tap(*boutons[resource])
     time.sleep(1.5)
@@ -919,11 +919,11 @@ def pay_upgrade(phone, templates, resource):
         time.sleep(1.2)
         phone.back()
         time.sleep(1.0)
-        return False
+        return "indisponible"
     if not confirm_dialog_open(img):
         print(f"    [{resource}] aucune fenetre de confirmation")
         record_unknown(img, f"ameliorer-{resource}")
-        return False
+        return "indisponible"
 
     x0, y0, x1, y1 = HUD_BOX
     avant = img[y0:y1, x0:x1]
@@ -946,15 +946,15 @@ def pay_upgrade(phone, templates, resource):
             shot = phone.screenshot()
             if menu_open(shot) and not confirm_dialog_open(shot) \
                     and not cancel_dialog_open(shot):
-                return False
+                return "refuse"
             phone.back()
             time.sleep(1.0)
-        return False
+        return "refuse"
 
     if (confirm_dialog_open(img) or menu_open(img)
             or identify(img, templates)[0] != "home"):
         back_to_home(phone, templates)
-    return paye
+    return "paye"
 
 
 def upgrade_walls(phone, templates, args, rng, verbose=True):
@@ -1048,7 +1048,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # l'aveugle.
             if not is_wall_selected() and not select():
                 break
-            if pay_upgrade(phone, templates, resource):
+            issue = pay_upgrade(phone, templates, resource)
+            if issue == "paye":
                 upgraded += 1
                 paye = True
                 order.remove(resource)
@@ -1056,11 +1057,15 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 if verbose:
                     print(f"[+] rempart ameliore en {resource}")
                 break
-            # Le paiement a ete refuse : cette reserve ne suffit plus, et elle
-            # ne remontera pas d'ici la fin de la serie. Inutile de la
-            # represser mur apres mur, chaque essai coutant une quinzaine de
-            # secondes et laissant le mur deselectionne.
-            epuisees.add(resource)
+            if issue == "refuse":
+                # Le paiement a bien ete refuse : cette reserve ne suffit plus
+                # et ne remontera pas d'ici la fin de la serie. Inutile de la
+                # represser mur apres mur, chaque essai coutant une quinzaine
+                # de secondes et laissant le mur deselectionne.
+                epuisees.add(resource)
+            # "indisponible" ne dit rien de la reserve : le jeu n'a pas propose
+            # l'amelioration sur ce mur-la. La marquer epuisee ecartait une
+            # ressource pourtant abondante pour tout le reste de la serie.
             order.remove(resource)
             order.append(resource)
         if not paye:
