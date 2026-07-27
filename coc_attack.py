@@ -353,6 +353,27 @@ def identify(img, templates):
 # Butin
 # --------------------------------------------------------------------------
 
+def compte_chiffres(img, y0, y1, seuil=160):
+    """Nombre de chiffres visibles sur une ligne de butin.
+
+    Les chiffres du jeu ne se touchent pas : chaque colonne claire isolee en
+    est un. Ce comptage ne depend pas de l'OCR et permet de rejeter ses
+    lectures d'une longueur impossible, comme ce 668 649 rendu en sept
+    chiffres.
+    """
+    x0, x1 = LOOT_X
+    colonnes = (img[y0:y1, x0:x1].min(axis=2) > seuil).any(axis=0)
+    n, largeur = 0, 0
+    for pleine in colonnes:
+        if pleine:
+            largeur += 1
+        else:
+            if largeur >= 8:
+                n += 1
+            largeur = 0
+    return n + 1 if largeur >= 8 else n
+
+
 def read_loot(img):
     """Lectures du butin, plusieurs par ressource.
 
@@ -371,6 +392,7 @@ def read_loot(img):
     x0, x1 = LOOT_X
     out = {}
     for name, (y0, y1) in LOOT_LINES.items():
+        attendu = compte_chiffres(img, y0, y1)
         lectures = []
         for seuil, echelle in ((160, 6), (175, 6), (160, 8)):
             crop = img[y0:y1, x0:x1]
@@ -381,9 +403,12 @@ def read_loot(img):
                 big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
             chiffres = re.sub(r"\D", "", txt)
             valeur = int(chiffres) if chiffres else None
-            if valeur is not None and valeur <= 20_000_000:
+            # Une lecture dont la longueur ne colle pas aux chiffres visibles
+            # est fausse, meme si l'OCR la repete a l'identique.
+            if (valeur is not None and valeur <= 20_000_000
+                    and (attendu == 0 or len(chiffres) == attendu)):
                 lectures.append(valeur)
-        out[name] = lectures
+        out[name] = {"lectures": lectures, "chiffres": attendu}
     return out
 
 
@@ -391,16 +416,33 @@ def loot_is_good(loot, minimum):
     """Ce village vaut-il l'attaque ?
 
     Il ne s'agit pas de connaitre le butin au chiffre pres, mais de savoir de
-    quel cote du seuil il tombe. Des lectures qui divergent restent donc
-    exploitables tant qu'elles tombent toutes du meme cote, ce qui permet de
-    trancher bien plus souvent qu'en exigeant leur accord exact.
+    quel cote du seuil il tombe. Deux sources y suffisent souvent sans que
+    l'OCR ait besoin d'etre exact.
 
+    Le nombre de chiffres visibles encadre d'abord la valeur : six chiffres,
+    c'est moins d'un million, donc sous un seuil d'un million et demi, quoi
+    qu'en dise l'OCR. Ce seul comptage tranche la plupart des cas.
+
+    Restent les valeurs dont la longueur enjambe le seuil : les lectures y
+    servent alors, et suffisent tant qu'elles tombent toutes du meme cote.
     Quand elles l'encadrent, ou qu'aucune n'a abouti, on attaque : passer un
     village correct coute plus cher qu'en attaquer un pauvre.
     """
     detail, riche, pauvre = [], False, True
     for nom in ("or", "elixir"):
-        lectures = loot.get(nom) or []
+        info = loot.get(nom) or {}
+        lectures = info.get("lectures") or []
+        chiffres = info.get("chiffres") or 0
+
+        if chiffres:
+            if 10 ** chiffres - 1 < minimum:        # trop court pour atteindre
+                detail.append(f"{nom}<{10 ** chiffres}")
+                continue
+            if 10 ** (chiffres - 1) >= minimum:     # trop long pour rester sous
+                detail.append(f"{nom}>{10 ** (chiffres - 1)}")
+                riche = True
+                continue
+
         if not lectures:
             detail.append(f"{nom}=?")
             pauvre = False
