@@ -1029,7 +1029,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         payables = [r for r, cx in upgrade_buttons(shot).items()
                     if cost_affordable(shot, cx[0])]
         if payables:
-            order.sort(key=lambda r: (r not in payables, order.index(r)))
+            # Les rangs sont figes avant le tri : pendant un sort en place,
+            # la liste apparait vide au code appele par la cle.
+            rang = {r: i for i, r in enumerate(order)}
+            order.sort(key=lambda r: (r not in payables, rang[r]))
         candidates = [r for r in order if r not in epuisees
                       and (not payables or r in payables)]
         if not candidates:
