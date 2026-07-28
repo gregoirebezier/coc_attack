@@ -244,11 +244,11 @@ def zone_recherche():
 # Change des que la facon de trouver les remparts change : le cache des points
 # ecartes se purge alors de lui-meme, au lieu de faire porter a la detection
 # actuelle les erreurs de la precedente.
-DETECTEUR_VERSION = "motif-2-vue-stable"
+DETECTEUR_VERSION = "motif-3-butee"
 # Change des que la regle qui declare un mur au maximum change. Ce classement
 # etant definitif, une regle trop laxative laisse derriere elle des remparts
 # retires du vivier pour toujours : il faut pouvoir les rendre.
-REGLE_MAXIMES = "complet-2-vue-stable"
+REGLE_MAXIMES = "complet-3-butee"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 VUE_PHASE = os.path.join(HERE, "vue.png")   # la vue recentree de la derniere phase
 VUE_PRECEDENTE = os.path.join(HERE, "vue_prec.png")   # celle d'avant, pour comparer
