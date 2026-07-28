@@ -218,6 +218,10 @@ def zone_recherche():
 # fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
 # ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
 # pour ne plus y revenir. Chaque essai inutile coute cinq secondes.
+# Change des que la facon de trouver les remparts change : le cache des points
+# ecartes se purge alors de lui-meme, au lieu de faire porter a la detection
+# actuelle les erreurs de la precedente.
+DETECTEUR_VERSION = "motif-1"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
@@ -1224,10 +1228,20 @@ def explore_points(rng, n=None):
 
 
 def load_wall_cache():
+    """Points retenus des phases precedentes.
+
+    Les points ecartes ne valent que pour le detecteur qui les a produits :
+    ceux de la detection par couleur bloquaient deux vrais remparts que les
+    motifs trouvent. On les oublie donc des que la detection change de nature,
+    en gardant les remparts confirmes, qui eux restent vrais.
+    """
     try:
         with open(WALL_CACHE) as f:
             data = json.load(f)
-        return ([tuple(p) for p in data.get("murs", [])],
+        murs = [tuple(p) for p in data.get("murs", [])]
+        if data.get("detecteur") != DETECTEUR_VERSION:
+            return murs, [], []
+        return (murs,
                 [tuple(p) for p in data.get("autres", [])],
                 [tuple(p) for p in data.get("suspects", [])])
     except (OSError, ValueError):
@@ -1237,7 +1251,8 @@ def load_wall_cache():
 def save_wall_cache(murs, autres, suspects):
     try:
         with open(WALL_CACHE, "w") as f:
-            json.dump({"murs": [list(p) for p in murs[-400:]],
+            json.dump({"detecteur": DETECTEUR_VERSION,
+                       "murs": [list(p) for p in murs[-400:]],
                        "autres": [list(p) for p in autres[-400:]],
                        "suspects": [list(p) for p in suspects[-400:]]}, f)
     except OSError:
