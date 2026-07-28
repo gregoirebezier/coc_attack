@@ -142,7 +142,13 @@ TITLE_BOX = (850, 690, 1600, 748)      # "Rempart (Niveau 17)"
 BUTTON_ROW_Y = (782, 798)
 BUTTON_MIN_W, BUTTON_MAX_W = 140, 215
 BUTTON_TAP_Y = 855
-ICON_MIN = 2.5
+# Seuil de presence d'une icone de ressource. Il doit laisser passer un vrai
+# bouton d'amelioration (3.9 pour la piece, 5.9 pour la goutte) sans retenir
+# "Choisir rangee", dont les fleches vertes tirent assez sur le jaune pour
+# marquer 2.6. Tapant ce bouton par erreur, le programme selectionnait une
+# rangee entiere de remparts et se retrouvait dans un mode ou ses reperes ne
+# valaient plus rien.
+ICON_MIN = 3.2
 # "Ameliorer" ouvre une fenetre de confirmation avant de debiter. Son grand
 # panneau de texte est presque entierement blanc (88 % contre moins de 5 %
 # partout ailleurs), ce qui la rend impossible a confondre.
