@@ -1219,11 +1219,28 @@ MURS_INTERDITS = False     # coupe-circuit arme si des gemmes ont ete depensees
 _STOCKS = []               # historique (or, elixir) des phases sans amelioration
 
 
+def masque_chiffres(z, seuil):
+    """Isole les chiffres d'une case. Seuil None : contraste local.
+
+    La barre de ressources se remplit : sa portion pleine est claire, et quand
+    elle passe sous les chiffres blancs, aucune clarte absolue ne les separe
+    plus - c'est pourquoi la panne allait et venait avec le niveau des
+    reserves. Le contraste local, lui, voit encore le liseré sombre qui borde
+    chaque chiffre.
+    """
+    if seuil is not None:
+        return (z.min(axis=2) > seuil).astype(np.uint8) * 255
+    import cv2
+    gris = cv2.cvtColor(z.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+    return cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                 cv2.THRESH_BINARY, 41, -12)
+
+
 def compte_colonnes(z):
     """Combien de chiffres une case en montre, sans passer par l'OCR."""
     comptes = []
-    for seuil in STOCK_SEUILS:
-        colonnes = (z.min(axis=2) > seuil).any(axis=0)
+    for seuil in STOCK_SEUILS + (None,):
+        colonnes = (masque_chiffres(z, seuil) > 0).any(axis=0)
         n, largeur = 0, 0
         for pleine in colonnes:
             if pleine:
@@ -1248,8 +1265,8 @@ def read_stocks(img, templates):
         z = img[y0:y1, x0:x1]
         attendus = compte_colonnes(z)
         lectures = []
-        for seuil in STOCK_SEUILS:
-            mask = (z.min(axis=2) > seuil).astype(np.uint8) * 255
+        for seuil in STOCK_SEUILS + (None,):
+            mask = masque_chiffres(z, seuil)
             big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6,
                                                       (y1 - y0) * 6),
                                                      Image.LANCZOS)
