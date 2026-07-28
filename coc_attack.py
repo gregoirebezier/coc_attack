@@ -120,6 +120,11 @@ GEM_BOX = (2000, 335, 2210, 392)
 # le selectionner. Rien dans le journal ne le trahit autrement.
 STOCK_LINES = {"or": (1975, 42, 2170, 84), "elixir": (1975, 146, 2170, 188)}
 PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
+# Les chiffres sont blancs, mais la barre de ressources se detache sur le decor
+# du village. Un crane pale y a suffi : a cent soixante-dix, son gris passait
+# pour du texte, cinquante-neuf pour cent de la case s'allumait et les chiffres
+# s'y noyaient - l'or devenait illisible, l'elixir perdait son premier chiffre.
+STOCK_BLANC = 200        # clarte minimale d'un pixel de chiffre
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
@@ -1182,7 +1187,7 @@ def read_stocks(img, templates):
     out = {}
     for nom, (x0, y0, x1, y1) in STOCK_LINES.items():
         c = img[y0:y1, x0:x1]
-        mask = (c.min(axis=2) > 170).astype(np.uint8) * 255
+        mask = (c.min(axis=2) > STOCK_BLANC).astype(np.uint8) * 255
         big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6, (y1 - y0) * 6),
                                                  Image.LANCZOS)
         chiffres = re.sub(r"\D", "",
