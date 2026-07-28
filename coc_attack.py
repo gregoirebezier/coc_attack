@@ -1456,7 +1456,14 @@ def back_to_home(phone, templates, tries=4):
             # ratages de cette sorte ecartent un vrai rempart du vivier. On ne
             # touche au bouton retour qu'apres avoir vu le menu, car au village
             # sans menu il ouvre la confirmation de sortie du jeu.
-            if menu_open(img):
+            if menu_open(img) and menu_open(phone.screenshot()):
+                # Deux lectures avant d'appuyer, car un menu se referme parfois
+                # de lui-meme entre la capture et le tap - et le bouton retour
+                # presse au village sans menu ouvre la confirmation de sortie
+                # du jeu, dont le bouton OK ferme Clash of Clans et tombe en
+                # pleine zone ou l'on tape des remparts. Deux de ces fenetres
+                # sont apparues dans l'heure qui a suivi l'ajout de ce
+                # refermage, la ou il n'y en avait aucune avant.
                 phone.back()
                 time.sleep(0.8)
                 continue
