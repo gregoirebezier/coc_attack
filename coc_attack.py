@@ -147,6 +147,7 @@ WALL_GOLD = dict(r_min=215, g_min=195, b_max=125, rb_min=130, rg_max=45)
 WALL_DILATE = 13         # fusionne le damier des murs avant l'echantillonnage
 WALL_GRID_STEP = 60      # espacement des points candidats, en pixels
 WALL_GRID_FILL = 0.6     # part de mur exigee autour d'un point
+WALL_MAJOR_RATIO = 0.25  # taille minimale d'une etendue, rapportee a la plus grande
 # Le village ne bouge pas d'une attaque a l'autre : ce que l'on a identifie une
 # fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
 # ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
@@ -955,6 +956,18 @@ def wall_candidates(img):
     mask = cv2.dilate((creme | coiffe).astype(np.uint8),
                       cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                 (WALL_DILATE, WALL_DILATE)))
+
+    # Les remparts forment de vastes etendues d'un seul tenant, la ou les
+    # dorures d'un batiment ne font que quelques centaines de pixels. En ne
+    # gardant que les etendues comparables a la plus grande, on ecarte
+    # l'essentiel des batiments : sur un village reel, cinquante candidats
+    # eparpilles sont devenus vingt-huit, tous sur des murs.
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask, 8)
+    if n > 1:
+        aires = [(stats[i, cv2.CC_STAT_AREA], i) for i in range(1, n)]
+        plus_grande = max(a for a, _ in aires)
+        gardees = [i for a, i in aires if a >= WALL_MAJOR_RATIO * plus_grande]
+        mask = np.isin(labels, gardees).astype(np.uint8)
 
     points = []
     demi = WALL_GRID_STEP // 2
