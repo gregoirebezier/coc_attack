@@ -258,6 +258,14 @@ REGLE_MAXIMES = "complet-3-butee"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 VUE_PHASE = os.path.join(HERE, "vue.png")   # la vue recentree de la derniere phase
 VUE_PRECEDENTE = os.path.join(HERE, "vue_prec.png")   # celle d'avant, pour comparer
+# La vue de reference : celle dans laquelle les coordonnees du cache sont
+# exprimees. Le recentrage n'amene pas toujours la carte au meme endroit - le
+# jeu avale les glissements qui suivent le premier - et les positions finales
+# different de plusieurs centaines de pixels. Plutot que de s'acharner a forcer
+# la camera, on mesure l'ecart et on recale.
+VUE_REFERENCE = os.path.join(HERE, "vue_ref.png")
+REPERE_BOITE = (700, 300, 960, 460)   # morceau de village servant de repere
+REPERE_MIN = 0.45                     # correlation en deca de laquelle on renonce
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
@@ -1382,6 +1390,32 @@ def explore_points(rng, n=None):
     return grille[:n if n is not None else EXPLORE_PAR_PHASE]
 
 
+def mesure_decalage(img):
+    """De combien la vue courante est decalee par rapport a la reference.
+
+    Renvoie (dx, dy), ou None si le repere ne se retrouve pas. Le decalage est
+    une translation pure : verifie par correspondance a plusieurs echelles, le
+    meilleur accord tombe exactement a l'echelle un.
+    """
+    import cv2
+    if not os.path.exists(VUE_REFERENCE):
+        return (0.0, 0.0)
+    try:
+        ref = np.asarray(Image.open(VUE_REFERENCE).convert("RGB"))
+    except (OSError, ValueError):
+        return (0.0, 0.0)
+    x0, y0, x1, y1 = REPERE_BOITE
+    repere = cv2.cvtColor(ref[y0:y1, x0:x1], cv2.COLOR_RGB2BGR)
+    scene = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2BGR)
+    if repere.shape[0] >= scene.shape[0] or repere.shape[1] >= scene.shape[1]:
+        return None
+    res = cv2.matchTemplate(scene, repere, cv2.TM_CCOEFF_NORMED)
+    _, score, _, (px, py) = cv2.minMaxLoc(res)
+    if score < REPERE_MIN:
+        return None
+    return (float(px - x0), float(py - y0))
+
+
 def load_wall_cache():
     """Points retenus des phases precedentes.
 
@@ -2298,6 +2332,18 @@ def relance_si_code_modifie(depart, restantes):
     pendant un combat, en reportant le nombre d'attaques restantes.
     """
     if restantes <= 0 or source_mtime() == depart:
+        return
+    # Se relancer sur un fichier a moitie ecrit tue le programme au demarrage
+    # suivant : une edition en deux temps a ainsi coute une attaque, l'appel a
+    # une variable etant deja la et sa creation pas encore. On verifie donc que
+    # le source tient debout avant de lui confier la suite ; sinon on continue
+    # avec le code en memoire et on reessaiera apres l'attaque suivante.
+    try:
+        with open(os.path.abspath(__file__)) as f:
+            compile(f.read(), __file__, "exec")
+    except (OSError, SyntaxError, ValueError) as e:
+        print(f"[i] source en cours d'ecriture ({type(e).__name__}), "
+              "relance reportee", flush=True)
         return
     argv, saute = [], False
     for a in sys.argv[1:]:

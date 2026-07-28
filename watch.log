@@ -54,3 +54,7 @@ attaque 2 : [i] code mis a jour : relance pour les 37 attaques restantes
 attaque 6 : [!] reserves illisibles (home, dernier retour : selection-ratee/menu) : la surveillance ne peut rien conclure sur cette phase
 attaque 8 : [i] code mis a jour : relance pour les 29 attaques restantes
 attaque 9 : [i] code mis a jour : relance pour les 20 attaques restantes
+attaque 1 : [!] erreur pendant l'attaque : NameError("name 'mouvements' is not defined")
+attaque 1 : [!] attaque ratee (1 d'affilee), tentative de reprise
+attaque 1 : [i] code mis a jour : relance pour les 19 attaques restantes
+attaque 4 : [i] code mis a jour : relance pour les 15 attaques restantes
