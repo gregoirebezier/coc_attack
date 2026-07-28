@@ -153,7 +153,10 @@ WALL_GOLD = dict(r_min=215, g_min=195, b_max=125, rb_min=130, rg_max=45)
 WALL_DILATE = 13         # fusionne le damier des murs avant l'echantillonnage
 WALL_GRID_STEP = 60      # espacement des points candidats, en pixels
 WALL_GRID_FILL = 0.6     # part de mur exigee autour d'un point
-WALL_MAJOR_RATIO = 0.25  # taille minimale d'une etendue, rapportee a la plus grande
+# Taille minimale d'une etendue de mur, rapportee a la plus grande. Trop haut,
+# seuls les remparts de haut niveau - groupes en gros bloc - etaient vus, et
+# les beiges, moins chers et disperses, restaient ignores.
+WALL_MAJOR_RATIO = 0.12
 # Le village ne bouge pas d'une attaque a l'autre : ce que l'on a identifie une
 # fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
 # ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
@@ -1391,7 +1394,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # phase, la liste repart de zero, et le meme leurre coute cinq secondes a
     # chaque attaque de la nuit.
     connus, ecartes, suspects = load_wall_cache()
-    for _ in range(args.walls * 3):
+    # Le budget doit couvrir les essais infructueux, pas seulement les
+    # ameliorations : quinze essais s'epuisaient sur des points rates avant
+    # d'atteindre un mur payable, et la phase se terminait sans rien monter
+    # alors que des remparts bon marche attendaient ailleurs. Chaque point
+    # rate deux fois est ensuite ecarte pour de bon, si bien que ce budget se
+    # consomme de moins en moins au fil des attaques.
+    for _ in range(args.walls * 8):
         if upgraded >= args.walls:
             break
         img = phone.screenshot()
