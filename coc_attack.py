@@ -180,12 +180,13 @@ WALL_MAJOR_RATIO = 0.12
 MOTIF_DIR = os.path.join(HERE, "motifs")
 MOTIF_DEMI = (26, 22)    # demi-largeur et demi-hauteur d'une imagette
 MOTIF_SEUIL = 0.78       # correlation minimale pour retenir une correspondance
-MOTIF_MAX = 12           # nombre d'imagettes conservees
+MOTIF_MAX = 18           # nombre d'imagettes conservees
 MOTIF_ECART = 45         # distance en deca de laquelle deux trouvailles se valent
 MOTIF_ECHELLE = 0.5      # reduction appliquee avant la recherche
 MOTIF_DEJA_VU = 0.90     # au-dela, un mur n'apprend rien de nouveau
 MOTIF_VOISINAGE = 130    # distance ou l'on cherche les remparts voisins
 MOTIF_VOISINS_MIN = 2    # voisins exiges : un mur seul n'est pas un mur
+MOTIF_COUVERT = 70       # rayon ou un motif rend un point de couleur inutile
 # Points d'exploration, tires d'une grille couvrant tout le village et
 # independants de toute signature de couleur. Chercher les remparts a leur
 # teinte suppose de connaitre a l'avance celle de chaque niveau : trois fois de
@@ -1093,7 +1094,12 @@ def cherche_motifs(img, motifs):
             continue
         res = cv2.matchTemplate(scene, tpl, cv2.TM_CCOEFF_NORMED)
         ys, xs = np.where(res >= MOTIF_SEUIL)
-        for x, y in zip(xs, ys):
+        # Du meilleur au moins bon, et non dans l'ordre de balayage. Un mur
+        # depasse le seuil sur toute une tache de pixels ; en gardant le
+        # premier rencontre, on retenait toujours son coin haut-gauche, a une
+        # vingtaine de pixels du centre. Assez pour que le tap tombe entre deux
+        # remparts et ne selectionne rien.
+        for x, y in sorted(zip(xs, ys), key=lambda p: -res[p[1], p[0]]):
             p = (float(x / e + dx + zx0), float(y / e + dy + zy0))
             if any(zzx0 <= p[0] <= zzx1 and zzy0 <= p[1] <= zzy1
                    for zzx0, zzy0, zzx1, zzy1 in VILLAGE_UI_ZONES):
@@ -1113,6 +1119,25 @@ def cherche_motifs(img, motifs):
 def wall_candidates(img):
     """Points a taper pour selectionner un rempart.
 
+    Les deux methodes se completent. Les motifs sont les plus surs, mais ils ne
+    connaissent que les remparts deja selectionnes avec succes : un niveau de
+    mur jamais tape leur est invisible. Sur le village, ils trouvaient les
+    trente murs sombres et pas un seul des beiges, pourtant a monter eux aussi.
+    On leur ajoute donc ce que la couleur voit ailleurs - huit murs beiges, tous
+    reels. Le premier beige selectionne fera un motif, et la couleur n'aura plus
+    a le rattraper.
+    """
+    trouves = cherche_motifs(img, charge_motifs())
+    couleur = candidats_couleur(img)
+    if not trouves:
+        return couleur
+    return trouves + [p for p in couleur
+                      if not proche(p, trouves, MOTIF_COUVERT)]
+
+
+def candidats_couleur(img):
+    """Points ou la teinte des remparts domine.
+
     On cherche le dessus creme des murs et leur coiffe doree, puis on
     echantillonne une grille de points la ou la couleur domine. Les reperer
     par leur forme ne marchait que sur des remparts isoles : regroupes en bloc
@@ -1123,12 +1148,6 @@ def wall_candidates(img):
     damier de petits carres separes de creux sombres, et sans cela aucun
     voisinage n'atteint la densite voulue.
     """
-    motifs = charge_motifs()
-    if motifs:
-        trouves = cherche_motifs(img, motifs)
-        if trouves:
-            return trouves
-
     import cv2
     x0, y0, x1, y1 = zone_recherche()
     z = img[y0:y1, x0:x1]

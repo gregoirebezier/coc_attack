@@ -28,3 +28,5 @@ attaque 4 : [!] impossible d'atteindre le combat
 attaque 4 : [!] attaque ratee (3 d'affilee), tentative de reprise
 attaque 5 : [!] impossible d'atteindre le combat
 attaque 5 : [!] attaque ratee (4 d'affilee), tentative de reprise
+attaque 6 : [i] code mis a jour : relance pour les 40 attaques restantes
+attaque 3 : [i] code mis a jour : relance pour les 37 attaques restantes
