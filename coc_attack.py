@@ -1266,18 +1266,19 @@ def read_stocks(img, templates):
                 lectures.append(int(chiffres))
         if not lectures:
             return None
-        # La valeur qui revient le plus souvent. Aucun seuil ne convient a
-        # toutes les situations : celui qui lit l'or sur un fond de falaise
-        # noie l'elixir dans le liseré clair de sa barre, et l'inverse. Le
-        # chiffre exact importe peu ici - ces montants ne servent qu'a
-        # l'alarme et au journal, jamais a decider d'un paiement - mais
-        # obtenir un nombre importe beaucoup, car une lecture manquee est une
-        # phase que la surveillance ne compte pas.
-        # A egalite de voix, la lecture du seuil le plus bas l'emporte : c'est
-        # celle qui est juste sur un fond normal, les seuils hauts n'existant
-        # que pour les cas ou un decor clair vient s'ajouter aux chiffres.
-        out[nom] = max(lectures,
-                       key=lambda v: (lectures.count(v), -lectures.index(v)))
+        # La premiere lecture valide, donc celle du seuil le plus bas. Aucune
+        # clarte unique ne convient a toutes les situations : celle qui lit
+        # l'or sur un fond de falaise noie l'elixir dans le lisere clair de sa
+        # barre. Mais les seuils hauts n'existent que pour ces fonds-la ; sur
+        # un fond normal ils rongent les traits et lisent un cinq la ou il y a
+        # un neuf. Les faire voter revenait a leur donner raison contre le
+        # seuil juste, deux voix contre une.
+        #
+        # Obtenir un nombre importe plus que sa derniere decimale : ces
+        # montants ne servent qu'a l'alarme et au journal, jamais a decider
+        # d'un paiement, et une lecture manquee est une phase que la
+        # surveillance ne compte pas.
+        out[nom] = lectures[0]
     return out
 
 
