@@ -1261,22 +1261,28 @@ def load_wall_cache():
         with open(WALL_CACHE) as f:
             data = json.load(f)
         murs = [tuple(p) for p in data.get("murs", [])]
+        # Les remparts au maximum, eux, restent vrais quel que soit le
+        # detecteur : une amelioration de mur est instantanee dans le jeu, un
+        # mur sans bouton n'est donc jamais un chantier en cours, il est fini.
+        maximes = [tuple(p) for p in data.get("maximes", [])]
         if data.get("detecteur") != DETECTEUR_VERSION:
-            return murs, [], []
+            return murs, [], [], maximes
         return (murs,
                 [tuple(p) for p in data.get("autres", [])],
-                [tuple(p) for p in data.get("suspects", [])])
+                [tuple(p) for p in data.get("suspects", [])],
+                maximes)
     except (OSError, ValueError):
-        return [], [], []
+        return [], [], [], []
 
 
-def save_wall_cache(murs, autres, suspects):
+def save_wall_cache(murs, autres, suspects, maximes):
     try:
         with open(WALL_CACHE, "w") as f:
             json.dump({"detecteur": DETECTEUR_VERSION,
                        "murs": [list(p) for p in murs[-400:]],
                        "autres": [list(p) for p in autres[-400:]],
-                       "suspects": [list(p) for p in suspects[-400:]]}, f)
+                       "suspects": [list(p) for p in suspects[-400:]],
+                       "maximes": [list(p) for p in maximes[-800:]]}, f)
     except OSError:
         pass
 
@@ -1616,7 +1622,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # des deux echecs ne se declenche jamais : un point rate une fois par
     # phase, la liste repart de zero, et le meme leurre coute cinq secondes a
     # chaque attaque de la nuit.
-    connus, ecartes, suspects = load_wall_cache()
+    connus, ecartes, suspects, maximes = load_wall_cache()
     # Le budget doit couvrir les essais infructueux, pas seulement les
     # ameliorations : quinze essais s'epuisaient sur des points rates avant
     # d'atteindre un mur payable, et la phase se terminait sans rien monter
@@ -1632,7 +1638,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
 
         # Les points deja reconnus comme remparts passent devant ; ceux ou
         # l'on est tombe sur autre chose sont ecartes d'office.
-        detectes = [p for p in wall_candidates(img) if not proche(p, ecartes)]
+        detectes = [p for p in wall_candidates(img)
+                    if not proche(p, ecartes) and not proche(p, maximes)]
         # Les points connus sont eux aussi soumis a la liste des ecartes :
         # sans quoi un point devenu muet y restait en tete et etait reessaye a
         # chaque phase, jusqu'a epuiser tout le budget en echecs.
@@ -1645,14 +1652,19 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         explores = []
         if len(connus) < EXPLORE_JUSQUA:
             explores = [p for p in explore_points(rng)
-                        if not proche(p, ecartes) and not proche(p, connus)]
-        cands = [p for p in connus if not proche(p, tried) and not proche(p, ecartes)] + \
+                        if not proche(p, ecartes) and not proche(p, connus)
+                        and not proche(p, maximes)]
+        cands = [p for p in connus if not proche(p, tried)
+                 and not proche(p, ecartes) and not proche(p, maximes)] + \
                 [p for p in detectes if not proche(p, tried) and not proche(p, connus)] + \
                 [p for p in explores if not proche(p, tried)]
         if not cands:
             # Le vivier s'est vide : a force d'ecarter, la liste finit par
             # couvrir tout le village et plus aucun candidat ne passe. On
-            # repart des observations plutot que de renoncer.
+            # repart des observations plutot que de renoncer - mais sans
+            # rendre au vivier les murs deja au maximum, qui ne redeviendront
+            # jamais ameliorables. Les redecouvrir coutait cinq secondes
+            # chacun, quarante et un d'affilee apres une seule remise a zero.
             if ecartes:
                 if verbose:
                     print(f"[i] plus aucun candidat, on oublie les {len(ecartes)}"
@@ -1792,8 +1804,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 # l'elixir qui manquent. L'alarme reste donc armee, et
                 # parlerait quand meme si la lecture des boutons tombait en
                 # panne au point de faire passer tous les murs pour maximes.
-                if not proche(point, ecartes):
-                    ecartes.append(point)
+                if not proche(point, maximes):
+                    maximes.append(point)
+                connus[:] = [p for p in connus if not proche(p, [point])]
                 if verbose:
                     print(f"    mur ({int(point[0])},{int(point[1])}) au maximum, ecarte")
             if len(epuisees) >= len(order):
@@ -1832,9 +1845,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         print(f"[!] GEMMES DEPENSEES : {gemmes_avant} -> {gemmes_apres}. "
               "Amelioration des remparts desactivee.", flush=True)
 
-    save_wall_cache(connus, ecartes, suspects)
+    save_wall_cache(connus, ecartes, suspects, maximes)
     if verbose:
-        print(f"[i] repere : {len(connus)} remparts connus, {len(ecartes)} points ecartes")
+        print(f"[i] repere : {len(connus)} remparts connus, {len(ecartes)} points"
+              f" ecartes, {len(maximes)} murs au maximum")
     back_to_home(phone, templates)
     return upgraded
 
