@@ -114,6 +114,12 @@ IDLE_RELOAD = (728, 674)          # "Recharger le jeu"
 # sept cent quarante-trois. On le releve donc avant et apres chaque passage sur
 # les remparts, et la moindre baisse coupe la fonctionnalite pour de bon.
 GEM_BOX = (2000, 335, 2210, 392)
+# Reserves du village, en haut a droite. Leur montee continue alors qu'aucun
+# rempart ne s'ameliore est le signe d'une panne silencieuse : le programme
+# attaque et ramene du butin, mais ne trouve plus de mur ou ne parvient plus a
+# le selectionner. Rien dans le journal ne le trahit autrement.
+STOCK_LINES = {"or": (1975, 42, 2170, 84), "elixir": (1975, 146, 2170, 188)}
+STOCK_ALERTE = 4         # phases sans rempart avant de crier
 
 # Butin affiche en haut a gauche. L elixir noir n entre pas dans la decision
 # et n est donc pas lu.
@@ -1003,6 +1009,51 @@ def read_gems(img, templates):
 
 
 MURS_INTERDITS = False     # coupe-circuit arme si des gemmes ont ete depensees
+_STOCKS = []               # historique (or, elixir) des phases sans amelioration
+
+
+def read_stocks(img, templates):
+    """Or et elixir du village. None hors du village ou si illisible."""
+    if identify(img, templates)[0] != "home":
+        return None
+    out = {}
+    for nom, (x0, y0, x1, y1) in STOCK_LINES.items():
+        c = img[y0:y1, x0:x1]
+        mask = (c.min(axis=2) > 170).astype(np.uint8) * 255
+        big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6, (y1 - y0) * 6),
+                                                 Image.LANCZOS)
+        chiffres = re.sub(r"\D", "",
+                          ocr(big, "--psm 7 -c tessedit_char_whitelist=0123456789"))
+        valeur = int(chiffres) if chiffres and len(chiffres) <= 9 else None
+        if valeur is None:
+            return None
+        out[nom] = valeur
+    return out
+
+
+def surveille_stocks(stocks, ameliores, verbose=True):
+    """Crie si les reserves montent sans qu'aucun rempart ne s'ameliore.
+
+    C'est la panne qui ne laisse aucune trace : le programme attaque, ramene du
+    butin, et le butin s'accumule. Ni erreur, ni message d'echec - seulement des
+    reserves qui gonflent pendant que rien ne se construit.
+    """
+    if ameliores > 0:
+        _STOCKS.clear()
+        return
+    if stocks is None:
+        return
+    _STOCKS.append((stocks["or"], stocks["elixir"]))
+    if len(_STOCKS) < STOCK_ALERTE:
+        return
+    debut, fin = _STOCKS[0], _STOCKS[-1]
+    if fin[0] + fin[1] > debut[0] + debut[1]:
+        if verbose:
+            print(f"[!] ALERTE : {len(_STOCKS)} phases sans le moindre rempart "
+                  f"alors que les reserves montent "
+                  f"({debut[0]}+{debut[1]} -> {fin[0]}+{fin[1]}). "
+                  "La detection des murs est probablement en cause.", flush=True)
+        _STOCKS.clear()
 
 
 def load_wall_cache():
@@ -1475,7 +1526,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             continue
 
     back_to_home(phone, templates)
-    gemmes_apres = read_gems(phone.screenshot(), templates)
+    fin = phone.screenshot()
+    gemmes_apres = read_gems(fin, templates)
+    surveille_stocks(read_stocks(fin, templates), upgraded, verbose)
     if (gemmes_avant is not None and gemmes_apres is not None
             and gemmes_apres < gemmes_avant):
         MURS_INTERDITS = True
