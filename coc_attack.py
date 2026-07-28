@@ -1793,6 +1793,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # place.
     depart = phone.screenshot()
     immobile = False
+    mouvements = []
     for n in range(RECENTRE_MAX):
         phone.glisse(*RECENTRE_DEPART, *RECENTRE_ARRIVEE)
         time.sleep(1.2)
@@ -1806,6 +1807,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # n'avait pas bouge. Deux phases voisines se sont ainsi retrouvees
         # l'une contre la butee, l'autre au milieu du village : un ecart moyen
         # de soixante entre elles, quand le seuil d'immobilite est de trois.
+        mouvements.append(round(bouge, 1))
         if bouge < RECENTRE_STABLE and n + 1 >= RECENTRE_MIN:
             if immobile:
                 break
@@ -1814,6 +1816,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             immobile = False
     else:
         print(f"[i] vue non stabilisee apres {RECENTRE_MAX} glissements")
+    # Ce que chaque glissement a reellement deplace. Deux phases voisines
+    # s'obstinent a finir a des endroits differents, et supposer pourquoi m'a
+    # deja coute deux correctifs sans effet.
+    print(f"[i] recentrage : {mouvements}")
     # La vue recentree, telle que la phase l'a vue. Sans elle, on ne peut pas
     # verifier apres coup ou tombaient les candidats : la vue derive entre deux
     # phases, et comparer des coordonnees a un ecran pris plus tard fait passer
