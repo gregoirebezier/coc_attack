@@ -109,6 +109,12 @@ IDLE_TEXT_BOX = (580, 380, 1700, 560)
 IDLE_DARK_MIN = 70.0
 IDLE_RELOAD = (728, 674)          # "Recharger le jeu"
 
+# Compteur de gemmes. Aucune action du programme ne doit en depenser : une
+# recherche de rempart tombee sur le bouton "+" du bandeau a suffi a en couter
+# sept cent quarante-trois. On le releve donc avant et apres chaque passage sur
+# les remparts, et la moindre baisse coupe la fonctionnalite pour de bon.
+GEM_BOX = (2000, 335, 2210, 392)
+
 # Butin affiche en haut a gauche. L elixir noir n entre pas dans la decision
 # et n est donc pas lu.
 LOOT_LINES = {"or": (148, 188), "elixir": (204, 244)}
@@ -964,6 +970,21 @@ def wall_candidates(img):
             points.append((px, py))
     return points
 
+def read_gems(img):
+    """Nombre de gemmes affiche. None si illisible."""
+    x0, y0, x1, y1 = GEM_BOX
+    c = img[y0:y1, x0:x1]
+    mask = (c.min(axis=2) > 170).astype(np.uint8) * 255
+    big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6, (y1 - y0) * 6),
+                                             Image.LANCZOS)
+    chiffres = re.sub(r"\D", "",
+                      ocr(big, "--psm 7 -c tessedit_char_whitelist=0123456789"))
+    return int(chiffres) if chiffres and len(chiffres) <= 6 else None
+
+
+MURS_INTERDITS = False     # coupe-circuit arme si des gemmes ont ete depensees
+
+
 def load_wall_cache():
     try:
         with open(WALL_CACHE) as f:
@@ -1280,6 +1301,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     d'avoir a lire les reserves, le jeu refusant simplement l'operation quand
     la ressource manque.
     """
+    global MURS_INTERDITS
+    if MURS_INTERDITS:
+        print("[!] remparts desactives : des gemmes ont ete depensees plus tot")
+        return 0
+    depart = phone.screenshot()
+    gemmes_avant = read_gems(depart)
+
     upgraded = 0
     tried = set()
     # Ordre d'essai des ressources. Un essai qui echoue coute une quinzaine de
@@ -1425,6 +1453,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                       f"(reste : {', '.join(r for r in order if r not in epuisees)})")
             time.sleep(1.0)     # laisser le jeu se stabiliser
             continue
+
+    gemmes_apres = read_gems(phone.screenshot())
+    if (gemmes_avant is not None and gemmes_apres is not None
+            and gemmes_apres < gemmes_avant):
+        MURS_INTERDITS = True
+        print(f"[!] GEMMES DEPENSEES : {gemmes_avant} -> {gemmes_apres}. "
+              "Amelioration des remparts desactivee.", flush=True)
 
     save_wall_cache(connus, ecartes, suspects)
     if verbose:
