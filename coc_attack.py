@@ -970,8 +970,15 @@ def wall_candidates(img):
             points.append((px, py))
     return points
 
-def read_gems(img):
-    """Nombre de gemmes affiche. None si illisible."""
+def read_gems(img, templates):
+    """Nombre de gemmes affiche au village. None hors du village ou illisible.
+
+    Le compteur n'existe qu'a l'ecran du village : le lire ailleurs renvoyait
+    des valeurs inventees, et la securite qui s'appuie dessus criait alors a
+    tort. Une alarme qui se declenche sans raison finit par etre ignoree.
+    """
+    if identify(img, templates)[0] != "home":
+        return None
     x0, y0, x1, y1 = GEM_BOX
     c = img[y0:y1, x0:x1]
     mask = (c.min(axis=2) > 170).astype(np.uint8) * 255
@@ -1306,7 +1313,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         print("[!] remparts desactives : des gemmes ont ete depensees plus tot")
         return 0
     depart = phone.screenshot()
-    gemmes_avant = read_gems(depart)
+    gemmes_avant = read_gems(depart, templates)
 
     upgraded = 0
     tried = set()
@@ -1454,7 +1461,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             time.sleep(1.0)     # laisser le jeu se stabiliser
             continue
 
-    gemmes_apres = read_gems(phone.screenshot())
+    back_to_home(phone, templates)
+    gemmes_apres = read_gems(phone.screenshot(), templates)
     if (gemmes_avant is not None and gemmes_apres is not None
             and gemmes_apres < gemmes_avant):
         MURS_INTERDITS = True
