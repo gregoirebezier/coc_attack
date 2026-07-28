@@ -1589,11 +1589,23 @@ def pay_upgrade(phone, templates, resource):
         record_unknown(menu, f"refus-{resource}")
         for _ in range(3):
             shot = phone.screenshot()
-            if menu_open(shot) and not confirm_dialog_open(shot) \
-                    and not cancel_dialog_open(shot):
-                return "refuse"
-            phone.back()
-            time.sleep(1.0)
+            if cancel_dialog_open(shot):
+                # Fenetre Annuler / OK : on sort par Annuler, jamais par OK,
+                # qui selon la fenetre achete des gemmes ou ferme le jeu.
+                phone.tap(*CANCEL_BUTTON)
+                time.sleep(1.0)
+                continue
+            if confirm_dialog_open(shot):
+                phone.back()
+                time.sleep(1.0)
+                continue
+            # Plus aucune fenetre par-dessus : on est ressorti, que le menu du
+            # mur soit encore la ou non. Appuyer encore sur retour ouvrirait la
+            # confirmation de sortie du jeu - et la boucle se mettait alors a
+            # osciller, l'appui suivant la refermant, le troisieme la rouvrant,
+            # si bien qu'elle restait ouverte une fois sur deux. C'est de la
+            # que venaient les fenetres de sortie trouvees en fin de phase.
+            return "refuse"
         return "refuse"
 
     if (confirm_dialog_open(img) or menu_open(img)
@@ -1864,8 +1876,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         fin = phone.screenshot()
         stocks = read_stocks(fin, templates)
     if stocks is None:
-        print("[!] reserves illisibles : la surveillance ne peut rien conclure "
-              "sur cette phase", flush=True)
+        print(f"[!] reserves illisibles ({identify(fin, templates)[0]}) : la "
+              "surveillance ne peut rien conclure sur cette phase", flush=True)
         record_unknown(fin, "reserves-illisibles")
     gemmes_apres = read_gems(fin, templates)
     surveille_stocks(stocks, upgraded, hors_portee, verbose)
