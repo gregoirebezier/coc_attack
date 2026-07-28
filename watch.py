@@ -20,7 +20,9 @@ LOG = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "run.log")
 
 SILENCE_MAX = 480        # secondes sans nouvelle ligne avant de crier
-ZEROS_REMPARTS = 4       # attaques d'affilee sans rempart avant de signaler
+ZEROS_REMPARTS = 12      # attaques sans rempart avant de signaler : un mur coute
+                         # desormais plus que le butin de plusieurs attaques,
+                         # une serie de zeros est donc normale
 RESUME_TOUS = 10         # frequence des points de situation, en attaques
 
 
