@@ -1117,6 +1117,11 @@ def pay_upgrade(phone, templates, resource):
     phone.tap(*boutons[resource])
     time.sleep(1.5)
     img = phone.screenshot()
+    if not confirm_dialog_open(img) and not cancel_dialog_open(img):
+        # La fenetre met parfois plus d'une seconde et demie a s'afficher :
+        # conclure trop tot faisait renoncer a un mur parfaitement payable.
+        time.sleep(1.3)
+        img = phone.screenshot()
     if cancel_dialog_open(img):
         # Fenetre Annuler / OK : le jeu propose autre chose que l'amelioration
         # du seul mur vise, typiquement un lot a plusieurs millions. On refuse.
