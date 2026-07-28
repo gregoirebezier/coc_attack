@@ -20,9 +20,6 @@ LOG = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "run.log")
 
 SILENCE_MAX = 480        # secondes sans nouvelle ligne avant de crier
-ZEROS_REMPARTS = 12      # attaques sans rempart avant de signaler : un mur coute
-                         # desormais plus que le butin de plusieurs attaques,
-                         # une serie de zeros est donc normale
 RESUME_TOUS = 10         # frequence des points de situation, en attaques
 
 
@@ -55,7 +52,6 @@ def emet(msg):
 
 def main():
     attaque = 0
-    zeros = 0
     faites = 0
     troupes_ok = 0
     remparts = 0
@@ -128,12 +124,12 @@ def main():
 
             m = re.search(r"\[\+\] (\d+) rempart", ligne)
             if m:
-                n = int(m.group(1))
-                remparts += n
-                zeros = zeros + 1 if n == 0 else 0
-                if zeros == ZEROS_REMPARTS:
-                    emet(f"{zeros} attaques d'affilee sans ameliorer un rempart "
-                         f"(attaque {attaque})")
+                # On compte, sans juger : une suite d'attaques sans rempart peut
+                # tenir a un prix hors de portee, ce que ce simple decompte ne
+                # sait pas voir. Le programme surveille lui-meme les reserves et
+                # ne crie que si le blocage n'est pas economique ; son alerte
+                # arrive ici par le filtre des messages en [!].
+                remparts += int(m.group(1))
                 continue
 
             # Tout ce qui signale un imprevu est relaye tel quel.
