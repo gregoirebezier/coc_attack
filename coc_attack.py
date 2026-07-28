@@ -179,6 +179,8 @@ MOTIF_MAX = 12           # nombre d'imagettes conservees
 MOTIF_ECART = 45         # distance en deca de laquelle deux trouvailles se valent
 MOTIF_ECHELLE = 0.5      # reduction appliquee avant la recherche
 MOTIF_DEJA_VU = 0.90     # au-dela, un mur n'apprend rien de nouveau
+MOTIF_VOISINAGE = 130    # distance ou l'on cherche les remparts voisins
+MOTIF_VOISINS_MIN = 2    # voisins exiges : un mur seul n'est pas un mur
 # Points d'exploration, tires d'une grille couvrant tout le village et
 # independants de toute signature de couleur. Chercher les remparts a leur
 # teinte suppose de connaitre a l'avance celle de chaque niveau : trois fois de
@@ -1080,7 +1082,14 @@ def cherche_motifs(img, motifs):
                 continue
             if not proche(p, trouves, MOTIF_ECART):
                 trouves.append(p)
-    return trouves
+    # Un rempart ne vit jamais seul : il appartient a une rangee. Un point sans
+    # voisin est donc autre chose qui partage la teinte des murs - une mine
+    # d'or a bien ete selectionnee ainsi, son dore etant celui des coiffes.
+    # Sur le village, ce filtre n'ecarte aucun des vingt-huit vrais candidats.
+    return [p for p in trouves
+            if sum(1 for q in trouves
+                   if q is not p and math.dist(p, q) <= MOTIF_VOISINAGE)
+            >= MOTIF_VOISINS_MIN]
 
 
 def wall_candidates(img):
