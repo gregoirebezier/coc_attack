@@ -187,6 +187,7 @@ MOTIF_DEJA_VU = 0.90     # au-dela, un mur n'apprend rien de nouveau
 MOTIF_VOISINAGE = 130    # distance ou l'on cherche les remparts voisins
 MOTIF_VOISINS_MIN = 2    # voisins exiges : un mur seul n'est pas un mur
 MOTIF_COUVERT = 70       # rayon ou un motif rend un point de couleur inutile
+SOURCE_POINT = {}        # d'ou vient chaque candidat, pour le diagnostic
 # Points d'exploration, tires d'une grille couvrant tout le village et
 # independants de toute signature de couleur. Chercher les remparts a leur
 # teinte suppose de connaitre a l'avance celle de chaque niveau : trois fois de
@@ -1128,11 +1129,17 @@ def wall_candidates(img):
     a le rattraper.
     """
     trouves = cherche_motifs(img, charge_motifs())
-    couleur = candidats_couleur(img)
-    if not trouves:
-        return couleur
-    return trouves + [p for p in couleur
-                      if not proche(p, trouves, MOTIF_COUVERT)]
+    couleur = [p for p in candidats_couleur(img)
+               if not proche(p, trouves, MOTIF_COUVERT)]
+    # Chaque point retient d'ou il vient : sans cela, on ne peut pas savoir
+    # laquelle des deux methodes fait rater les selections, et on corrige au
+    # jugé.
+    SOURCE_POINT.clear()
+    for p in trouves:
+        SOURCE_POINT[(round(p[0]), round(p[1]))] = "motif"
+    for p in couleur:
+        SOURCE_POINT[(round(p[0]), round(p[1]))] = "couleur"
+    return trouves + couleur
 
 
 def candidats_couleur(img):
@@ -1791,8 +1798,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 suspects.append(point)
             if verbose:
                 shot = phone.screenshot()
-                print(f"    mur ({int(point[0])},{int(point[1])}) non selectionne "
-                      f"(menu={menu_open(shot)}, titre={selected_title(shot)!r})")
+                venu = SOURCE_POINT.get((round(point[0]), round(point[1])), "cache")
+                print(f"    mur ({int(point[0])},{int(point[1])}) [{venu}] non "
+                      f"selectionne (menu={menu_open(shot)}, "
+                      f"titre={selected_title(shot)!r})")
             # Le tap a manque le mur. S'il n'a rien selectionne du tout, il ne
             # faut surtout pas appuyer sur retour : au village, cela ouvre la
             # confirmation de sortie du jeu.
