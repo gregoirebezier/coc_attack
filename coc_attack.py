@@ -1207,6 +1207,13 @@ def surveille_stocks(stocks, ameliores, prix_hors_portee, verbose=True):
     qu'une attaque rapporte. Crier dans ce cas ferait de l'alarme un bruit de
     fond, et le jour ou elle aurait raison, plus personne ne l'ecouterait.
     """
+    if stocks is not None and verbose:
+        # Sans cette ligne, le journal ne dit jamais ou en sont les reserves,
+        # alors que c'est ce qui decide de tout : un rempart coute plusieurs
+        # millions quand une attaque en rapporte un ou deux. Une phase sans
+        # amelioration ne se lit pas de la meme facon selon que le compte monte
+        # ou stagne.
+        print(f"[i] reserves : or={stocks['or']} elixir={stocks['elixir']}")
     if ameliores > 0 or prix_hors_portee:
         _STOCKS.clear()
         return
