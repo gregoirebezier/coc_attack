@@ -1184,6 +1184,16 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         cands = [p for p in connus if not proche(p, tried) and not proche(p, ecartes)] + \
                 [p for p in detectes if not proche(p, tried) and not proche(p, connus)]
         if not cands:
+            # Le vivier s'est vide : a force d'ecarter, la liste finit par
+            # couvrir tout le village et plus aucun candidat ne passe. On
+            # repart des observations plutot que de renoncer.
+            if ecartes:
+                if verbose:
+                    print(f"[i] plus aucun candidat, on oublie les {len(ecartes)}"
+                          " points ecartes et on recommence")
+                ecartes.clear()
+                suspects.clear()
+                continue
             if verbose:
                 print("[i] plus de rempart a ameliorer")
             break
@@ -1194,8 +1204,12 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         tried.add(point)
 
         def is_wall_selected(shot=None):
+            # Le titre suffit, et vaut mieux que la presence d'un menu : la
+            # rangee de boutons change selon le niveau du mur et le mode de
+            # selection, si bien qu'un rempart clairement nomme etait rejete
+            # parce que la case temoin ne contenait pas ce qu'on attendait.
             shot = phone.screenshot() if shot is None else shot
-            return menu_open(shot) and titre_est_rempart(selected_title(shot))
+            return titre_est_rempart(selected_title(shot))
 
         def select(essais=2):
             """Selectionne le mur vise et confirme que c'en est bien un.
