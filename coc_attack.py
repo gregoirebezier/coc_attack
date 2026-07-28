@@ -900,17 +900,19 @@ def load_wall_cache():
     try:
         with open(WALL_CACHE) as f:
             data = json.load(f)
-        return [tuple(p) for p in data.get("murs", [])], \
-               [tuple(p) for p in data.get("autres", [])]
+        return ([tuple(p) for p in data.get("murs", [])],
+                [tuple(p) for p in data.get("autres", [])],
+                [tuple(p) for p in data.get("suspects", [])])
     except (OSError, ValueError):
-        return [], []
+        return [], [], []
 
 
-def save_wall_cache(murs, autres):
+def save_wall_cache(murs, autres, suspects):
     try:
         with open(WALL_CACHE, "w") as f:
             json.dump({"murs": [list(p) for p in murs[-400:]],
-                       "autres": [list(p) for p in autres[-400:]]}, f)
+                       "autres": [list(p) for p in autres[-400:]],
+                       "suspects": [list(p) for p in suspects[-400:]]}, f)
     except OSError:
         pass
 
@@ -1161,8 +1163,11 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # qui manque.
     order = ["or", "elixir"]
     epuisees = set()        # reserves dont le paiement a deja ete refuse
-    connus, ecartes = load_wall_cache()
-    suspects = []     # points ayant echoue une fois, pas encore ecartes
+    # Les suspects se conservent d'une attaque a l'autre, sans quoi la regle
+    # des deux echecs ne se declenche jamais : un point rate une fois par
+    # phase, la liste repart de zero, et le meme leurre coute cinq secondes a
+    # chaque attaque de la nuit.
+    connus, ecartes, suspects = load_wall_cache()
     for _ in range(args.walls * 3):
         if upgraded >= args.walls:
             break
@@ -1279,7 +1284,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             time.sleep(1.0)     # laisser le jeu se stabiliser
             continue
 
-    save_wall_cache(connus, ecartes)
+    save_wall_cache(connus, ecartes, suspects)
     if verbose:
         print(f"[i] repere : {len(connus)} remparts connus, {len(ecartes)} points ecartes")
     back_to_home(phone, templates)
