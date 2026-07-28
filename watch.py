@@ -122,9 +122,12 @@ def main():
                 continue
 
             # Tout ce qui signale un imprevu est relaye tel quel.
+            # "aucune fenetre de confirmation" n'est plus un imprevu : c'est
+            # la reponse du jeu a un rempart hors de portee, devenu courant
+            # depuis que leur cout a atteint seize millions. Le relayer
+            # noierait les vraies alertes.
             if re.search(r"ecran inconnu archive|Traceback|Error|Exception|"
-                         r"\[!\]|aucune fenetre de confirmation|"
-                         r"^Termine|code mis a jour", ligne):
+                         r"\[!\]|^Termine|code mis a jour", ligne):
                 emet(f"attaque {attaque} : {ligne.strip()}")
 
 
