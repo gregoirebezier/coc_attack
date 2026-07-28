@@ -119,6 +119,7 @@ GEM_BOX = (2000, 335, 2210, 392)
 # attaque et ramene du butin, mais ne trouve plus de mur ou ne parvient plus a
 # le selectionner. Rien dans le journal ne le trahit autrement.
 STOCK_LINES = {"or": (1975, 42, 2170, 84), "elixir": (1975, 146, 2170, 188)}
+PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
@@ -1578,6 +1579,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # qui manque.
     order = ["or", "elixir"]
     epuisees = set()        # reserves dont le paiement a deja ete refuse
+    rouges = {}             # murs vus au prix rouge, par ressource
     hors_portee = False     # le jeu a signale un prix superieur aux reserves
     # Les suspects se conservent d'une attaque a l'autre, sans quoi la regle
     # des deux echecs ne se declenche jamais : un point rate une fois par
@@ -1710,7 +1712,16 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             if issue == "hors-portee":
                 # Le jeu a ecrit le prix en rouge : signal economique explicite.
                 hors_portee = True
-                epuisees.add(resource)
+                # Mais ce prix est celui de ce mur-la. Les remparts du village
+                # ne sont pas tous au meme niveau, donc pas au meme prix : un
+                # mur inabordable ne dit rien de son voisin moins avance.
+                # Renoncer des le premier rouge terminait la phase sans rien
+                # monter alors que des murs payables attendaient. Le rouge se
+                # lit dans le menu deja ouvert, sans un seul tap de plus : en
+                # essayer quelques-uns ne coute que la selection.
+                rouges[resource] = rouges.get(resource, 0) + 1
+                if rouges[resource] >= PRIX_ROUGE_MAX:
+                    epuisees.add(resource)
             if issue == "refuse":
                 # Le paiement a bien ete refuse : cette reserve ne suffit plus
                 # et ne remontera pas d'ici la fin de la serie. Inutile de la
