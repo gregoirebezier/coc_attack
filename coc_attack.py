@@ -1847,7 +1847,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     for _ in range(3):
         if stocks is not None:
             break
+        # Recapturer ne suffit pas : ce qui rend l'ecran illisible, c'est une
+        # fenetre restee ouverte, et elle ne se fermera pas toute seule. Les
+        # deux cas rencontres etaient la confirmation de sortie du jeu, dont le
+        # bouton OK tombe en pleine zone ou l'on tape des remparts. Il faut la
+        # refermer, pas attendre.
         time.sleep(1.5)
+        back_to_home(phone, templates)
         fin = phone.screenshot()
         stocks = read_stocks(fin, templates)
     if stocks is None:
