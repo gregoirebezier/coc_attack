@@ -120,6 +120,11 @@ GEM_BOX = (2000, 335, 2210, 392)
 # le selectionner. Rien dans le journal ne le trahit autrement.
 STOCK_LINES = {"or": (1975, 42, 2170, 84), "elixir": (1975, 146, 2170, 188)}
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
+# Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
+# l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
+# croire que l'elixir couvrait largement un mur a quatre millions, alors qu'il
+# n'y en avait qu'un peu plus d'un.
+STOCK_MAX = 30_000_000
 
 # Butin affiche en haut a gauche. L elixir noir n entre pas dans la decision
 # et n est donc pas lu.
@@ -1068,8 +1073,8 @@ def read_stocks(img, templates):
                                                  Image.LANCZOS)
         chiffres = re.sub(r"\D", "",
                           ocr(big, "--psm 7 -c tessedit_char_whitelist=0123456789"))
-        valeur = int(chiffres) if chiffres and len(chiffres) <= 9 else None
-        if valeur is None:
+        valeur = int(chiffres) if chiffres else None
+        if valeur is None or valeur > STOCK_MAX:
             return None
         out[nom] = valeur
     return out
