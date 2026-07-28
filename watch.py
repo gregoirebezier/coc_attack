@@ -60,6 +60,7 @@ def main():
     derniere_ligne = time.time()
     silence_signale = False
     absences = 0
+    inconnus = 0
 
     with open(LOG, "r", errors="replace") as f:
         f.seek(0, os.SEEK_END)
@@ -91,6 +92,18 @@ def main():
             derniere_ligne = time.time()
             silence_signale = False
             ligne = ligne.rstrip()
+
+            # Un ecran non reconnu qui revient sans fin signale un blocage que
+            # le silence ne trahit pas : le programme ecrit, mais tourne en
+            # rond. C'est ainsi qu'une fenetre de consentement affichee au
+            # lancement du jeu a immobilise le telephone.
+            if "ecran inconnu" in ligne:
+                inconnus += 1
+                if inconnus == 8:
+                    emet("BLOQUE : huit ecrans non reconnus d'affilee, "
+                         "le jeu attend probablement une reponse")
+                continue
+            inconnus = 0
 
             m = re.match(r"#+ Attaque (\d+)/", ligne)
             if m:
