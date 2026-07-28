@@ -130,6 +130,11 @@ PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # pour du texte, cinquante-neuf pour cent de la case s'allumait et les chiffres
 # s'y noyaient - l'or devenait illisible, l'elixir perdait son premier chiffre.
 STOCK_SEUILS = (200, 215, 230, 245)   # clartes essayees pour les chiffres
+# Prix des ameliorations de rempart, donnes par le joueur : 4,2 millions pour
+# un beige, 6 pour un jaune ou un dore noir. En dessous du moins cher, aucun
+# mur n'est payable et la phase ne peut que perdre son temps - une minute a
+# selectionner des remparts pour se voir repondre en rouge.
+MUR_PRIX_MIN = 4_200_000
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
@@ -1749,6 +1754,20 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     if MURS_INTERDITS:
         print("[!] remparts desactives : des gemmes ont ete depensees plus tot")
         return 0
+    # Rien a tenter si aucune reserve n'atteint le prix du rempart le moins
+    # cher. La phase entiere se resumerait a des prix en rouge, une minute
+    # perdue par attaque, soit une attaque de plus toutes les trois. On ne
+    # saute que sur une lecture reussie : une lecture manquee ne prouve rien.
+    stocks_avant = read_stocks(phone.screenshot(), templates)
+    if stocks_avant and max(stocks_avant.values()) < MUR_PRIX_MIN:
+        if verbose:
+            print(f"[i] remparts sautes : or={stocks_avant['or']} "
+                  f"elixir={stocks_avant['elixir']}, moins que {MUR_PRIX_MIN}")
+        # Le jeu n'a pas eu a le dire, mais c'est bien un prix hors de portee :
+        # l'alarme des reserves n'a pas a s'en emouvoir.
+        surveille_stocks(stocks_avant, 0, True, verbose=False)
+        return 0
+
     # La vue peut avoir ete laissee de travers : on la ramene contre sa butee
     # pour voir tous les remparts, et toujours sous le meme angle.
     #
