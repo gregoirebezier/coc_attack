@@ -238,6 +238,7 @@ DETECTEUR_VERSION = "motif-2-vue-stable"
 # retires du vivier pour toujours : il faut pouvoir les rendre.
 REGLE_MAXIMES = "complet-2-vue-stable"
 WALL_CACHE = os.path.join(HERE, "walls.json")
+VUE_PHASE = os.path.join(HERE, "vue.png")   # la vue recentree de la derniere phase
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
@@ -1757,6 +1758,14 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             break
     else:
         print(f"[i] vue non stabilisee apres {RECENTRE_MAX} glissements")
+    # La vue recentree, telle que la phase l'a vue. Sans elle, on ne peut pas
+    # verifier apres coup ou tombaient les candidats : la vue derive entre deux
+    # phases, et comparer des coordonnees a un ecran pris plus tard fait passer
+    # des points justes pour des points en pleine foret.
+    try:
+        Image.fromarray(depart.astype(np.uint8)).save(VUE_PHASE)
+    except (OSError, ValueError):
+        pass
     gemmes_avant = read_gems(depart, templates)
 
     upgraded = 0
