@@ -162,6 +162,20 @@ WALL_GRID_FILL = 0.6     # part de mur exigee autour d'un point
 # seuls les remparts de haut niveau - groupes en gros bloc - etaient vus, et
 # les beiges, moins chers et disperses, restaient ignores.
 WALL_MAJOR_RATIO = 0.12
+
+# Reconnaissance par motif. Plutot que de decrire la couleur d'un rempart -
+# ce qui suppose de connaitre a l'avance celle de chaque niveau, et a echoue
+# trois fois - le programme decoupe une imagette autour d'un mur qu'il vient
+# de selectionner avec succes, puis cherche ce motif dans le village. Il
+# apprend ainsi de lui-meme a quoi ressemblent les remparts du joueur, quels
+# qu'ils soient. Sur un village reel : trente-trois murs trouves, chacun sur
+# un segment, sans un seul faux positif, la ou la couleur en donnait vingt-deux
+# approximatifs dont certains sur des rochers.
+MOTIF_DIR = os.path.join(HERE, "motifs")
+MOTIF_DEMI = (26, 22)    # demi-largeur et demi-hauteur d'une imagette
+MOTIF_SEUIL = 0.78       # correlation minimale pour retenir une correspondance
+MOTIF_MAX = 8            # nombre d'imagettes conservees
+MOTIF_ECART = 45         # distance en deca de laquelle deux trouvailles se valent
 # Points d'exploration, tires d'une grille couvrant tout le village et
 # independants de toute signature de couleur. Chercher les remparts a leur
 # teinte suppose de connaitre a l'avance celle de chaque niveau : trois fois de
@@ -985,6 +999,59 @@ def deploy_all(phone, templates, args, rng, verbose=True):
 # Remparts
 # --------------------------------------------------------------------------
 
+def charge_motifs():
+    """Imagettes de remparts apprises lors des selections reussies."""
+    if not os.path.isdir(MOTIF_DIR):
+        return []
+    motifs = []
+    for nom in sorted(os.listdir(MOTIF_DIR))[:MOTIF_MAX]:
+        try:
+            motifs.append(np.asarray(Image.open(os.path.join(MOTIF_DIR, nom))
+                                     .convert("RGB")).astype(np.uint8))
+        except (OSError, ValueError):
+            pass
+    return motifs
+
+
+def apprend_motif(img, point):
+    """Retient l'aspect d'un rempart dont la selection vient de reussir."""
+    dx, dy = MOTIF_DEMI
+    x, y = int(point[0]), int(point[1])
+    if x - dx < 0 or y - dy < 0 or x + dx > REF_W or y + dy > REF_H:
+        return
+    try:
+        os.makedirs(MOTIF_DIR, exist_ok=True)
+        if len(os.listdir(MOTIF_DIR)) >= MOTIF_MAX:
+            return
+        patch = img[y - dy:y + dy, x - dx:x + dx].astype(np.uint8)
+        Image.fromarray(patch).save(os.path.join(MOTIF_DIR, f"{x}-{y}.png"))
+    except OSError:
+        pass
+
+
+def cherche_motifs(img, motifs):
+    """Positions des remparts ressemblant aux imagettes apprises."""
+    import cv2
+    zx0, zy0, zx1, zy1 = zone_recherche()
+    scene = cv2.cvtColor(img[zy0:zy1, zx0:zx1].astype(np.uint8), cv2.COLOR_RGB2BGR)
+    dx, dy = MOTIF_DEMI
+    trouves = []
+    for motif in motifs:
+        tpl = cv2.cvtColor(motif, cv2.COLOR_RGB2BGR)
+        if tpl.shape[0] >= scene.shape[0] or tpl.shape[1] >= scene.shape[1]:
+            continue
+        res = cv2.matchTemplate(scene, tpl, cv2.TM_CCOEFF_NORMED)
+        ys, xs = np.where(res >= MOTIF_SEUIL)
+        for x, y in zip(xs, ys):
+            p = (float(x + dx + zx0), float(y + dy + zy0))
+            if any(zzx0 <= p[0] <= zzx1 and zzy0 <= p[1] <= zzy1
+                   for zzx0, zzy0, zzx1, zzy1 in VILLAGE_UI_ZONES):
+                continue
+            if not proche(p, trouves, MOTIF_ECART):
+                trouves.append(p)
+    return trouves
+
+
 def wall_candidates(img):
     """Points a taper pour selectionner un rempart.
 
@@ -998,6 +1065,12 @@ def wall_candidates(img):
     damier de petits carres separes de creux sombres, et sans cela aucun
     voisinage n'atteint la densite voulue.
     """
+    motifs = charge_motifs()
+    if motifs:
+        trouves = cherche_motifs(img, motifs)
+        if trouves:
+            return trouves
+
     import cv2
     x0, y0, x1, y1 = zone_recherche()
     z = img[y0:y1, x0:x1]
@@ -1574,6 +1647,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # pas disponible.
         if not proche(point, connus):
             connus.append(point)     # ce point repond bien comme un rempart
+        apprend_motif(depart, point)
 
         paye = False
         for resource in [r for r in order if r not in epuisees]:
