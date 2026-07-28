@@ -12,7 +12,7 @@ PAUSE=${PAUSE:-60}
 
 while true; do
     echo "===== nouvelle serie de $SERIE attaques ($(date '+%H:%M:%S')) ====="
-    python3 -u coc_attack.py --rounds "$SERIE" --walls 5
+    python3 -u coc_attack.py --rounds "$SERIE" --walls 5 --wall-zone droite
     code=$?
     echo "===== serie terminee (code $code), reprise dans ${PAUSE}s ====="
     sleep "$PAUSE"

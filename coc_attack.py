@@ -165,6 +165,23 @@ WALL_MAJOR_RATIO = 0.12
 # suffisent a les decouvrir, et le cache retient ce qui a repondu.
 EXPLORE_STEP = 90        # espacement de la grille d'exploration
 EXPLORE_PAR_PHASE = 6    # points explores a chaque passage
+
+# Portion du village ou chercher les remparts. Les concentrer d'un cote fait
+# gagner un temps reel : chaque essai coute cinq secondes, et ratisser un
+# village entier pour des murs tous ranges a droite en gaspille l'essentiel.
+ZONES_MURS = {
+    "tout":   (0.00, 1.00),
+    "droite": (0.48, 1.00),
+    "gauche": (0.00, 0.52),
+}
+ZONE_MURS = "tout"       # fixe par --wall-zone
+
+
+def zone_recherche():
+    """Bornes horizontales de la recherche de remparts."""
+    x0, y0, x1, y1 = VILLAGE_AREA
+    f0, f1 = ZONES_MURS[ZONE_MURS]
+    return int(x0 + f0 * (x1 - x0)), y0, int(x0 + f1 * (x1 - x0)), y1
 # Le village ne bouge pas d'une attaque a l'autre : ce que l'on a identifie une
 # fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
 # ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
@@ -960,7 +977,7 @@ def wall_candidates(img):
     voisinage n'atteint la densite voulue.
     """
     import cv2
-    x0, y0, x1, y1 = VILLAGE_AREA
+    x0, y0, x1, y1 = zone_recherche()
     z = img[y0:y1, x0:x1]
     r, g, b = z[:, :, 0], z[:, :, 1], z[:, :, 2]
     c = WALL_CREAM
@@ -1075,7 +1092,7 @@ def surveille_stocks(stocks, ameliores, prix_hors_portee, verbose=True):
 
 def explore_points(rng, n=None):
     """Points tires au hasard sur tout le village, sans critere de couleur."""
-    x0, y0, x1, y1 = VILLAGE_AREA
+    x0, y0, x1, y1 = zone_recherche()
     grille = [(float(x), float(y))
               for y in range(y0 + EXPLORE_STEP // 2, y1, EXPLORE_STEP)
               for x in range(x0 + EXPLORE_STEP // 2, x1, EXPLORE_STEP)
@@ -1831,6 +1848,10 @@ def main():
                    help="terminer le combat des le deploiement fini")
     p.add_argument("--probe", action="store_true",
                    help="deploie puis s'arrete sans terminer le combat")
+    p.add_argument("--wall-zone", default="tout", choices=list(ZONES_MURS),
+                   help="ou chercher les remparts : 'droite', 'gauche' ou "
+                        "'tout' (defaut). Les concentrer d'un cote evite de "
+                        "perdre cinq secondes par essai a l'autre bout du village")
     p.add_argument("--walls", type=int, default=5,
                    help="remparts a ameliorer apres chaque attaque, en or ou en "
                         "elixir (0 pour desactiver, defaut: 5)")
@@ -1845,7 +1866,8 @@ def main():
                         "pouvoir les traiter ensuite (vide pour desactiver)")
     args = p.parse_args()
 
-    global UNKNOWN_DIR
+    global UNKNOWN_DIR, ZONE_MURS
+    ZONE_MURS = args.wall_zone
     UNKNOWN_DIR = args.unknown_dir or None
     if UNKNOWN_DIR and not os.path.isabs(UNKNOWN_DIR):
         UNKNOWN_DIR = os.path.join(HERE, UNKNOWN_DIR)
