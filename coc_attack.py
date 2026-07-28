@@ -180,6 +180,7 @@ RECENTRE_FOIS = 2
 
 EXPLORE_STEP = 90        # espacement de la grille d'exploration
 EXPLORE_PAR_PHASE = 6    # points explores a chaque passage
+EXPLORE_JUSQUA = 8       # au-dela de tant de murs connus, on cesse d'explorer
 
 # Portion du village ou chercher les remparts. Les concentrer d'un cote fait
 # gagner un temps reel : chaque essai coute cinq secondes, et ratisser un
@@ -1491,8 +1492,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # A la detection par couleur s'ajoutent quelques points d'exploration :
         # c'est le seul moyen de trouver un rempart dont la teinte n'a pas ete
         # prevue, et ce qui repond enrichit le cache pour les fois suivantes.
-        explores = [p for p in explore_points(rng)
-                    if not proche(p, ecartes) and not proche(p, connus)]
+        # L'exploration ne sert qu'a decouvrir : une fois assez de remparts
+        # connus, elle ne fait plus que perdre cinq secondes par point tire au
+        # hasard. On la coupe alors, et on la reprend si le cache se vide.
+        explores = []
+        if len(connus) < EXPLORE_JUSQUA:
+            explores = [p for p in explore_points(rng)
+                        if not proche(p, ecartes) and not proche(p, connus)]
         cands = [p for p in connus if not proche(p, tried) and not proche(p, ecartes)] + \
                 [p for p in detectes if not proche(p, tried) and not proche(p, connus)] + \
                 [p for p in explores if not proche(p, tried)]
