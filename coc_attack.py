@@ -1219,6 +1219,26 @@ MURS_INTERDITS = False     # coupe-circuit arme si des gemmes ont ete depensees
 _STOCKS = []               # historique (or, elixir) des phases sans amelioration
 
 
+def compte_colonnes(z):
+    """Combien de chiffres une case en montre, sans passer par l'OCR."""
+    comptes = []
+    for seuil in STOCK_SEUILS:
+        colonnes = (z.min(axis=2) > seuil).any(axis=0)
+        n, largeur = 0, 0
+        for pleine in colonnes:
+            if pleine:
+                largeur += 1
+            else:
+                if largeur >= 4:
+                    n += 1
+                largeur = 0
+        if largeur >= 4:
+            n += 1
+        if n:
+            comptes.append(n)
+    return max(set(comptes), key=comptes.count) if comptes else 0
+
+
 def read_stocks(img, templates):
     """Or et elixir du village. None hors du village ou si illisible."""
     if identify(img, templates)[0] != "home":
@@ -1226,6 +1246,7 @@ def read_stocks(img, templates):
     out = {}
     for nom, (x0, y0, x1, y1) in STOCK_LINES.items():
         z = img[y0:y1, x0:x1]
+        attendus = compte_colonnes(z)
         lectures = []
         for seuil in STOCK_SEUILS:
             mask = (z.min(axis=2) > seuil).astype(np.uint8) * 255
@@ -1235,7 +1256,13 @@ def read_stocks(img, templates):
             chiffres = re.sub(r"\D", "",
                               ocr(big, "--psm 7 -c "
                                        "tessedit_char_whitelist=0123456789"))
-            if chiffres and int(chiffres) <= STOCK_MAX:
+            # Le nombre de chiffres se compte sans OCR : ceux du jeu ne se
+            # touchent pas, chaque colonne claire isolee en est un. Une lecture
+            # d'une autre longueur est un artefact, comme ce 20 930 725 rendu
+            # en huit chiffres la ou le village en affichait sept - il passait
+            # sous le plafond des reserves et emportait le vote.
+            if (chiffres and int(chiffres) <= STOCK_MAX
+                    and (not attendus or len(chiffres) == attendus)):
                 lectures.append(int(chiffres))
         if not lectures:
             return None
