@@ -1669,6 +1669,14 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 if is_wall_selected():
                     return True
                 time.sleep(0.8)     # laisser l'animation se terminer
+                # Relire l'ecran avant de retaper, et non apres. Retaper un mur
+                # deja selectionne le deselectionne : une verification prise
+                # trop tot, pendant que le menu s'ouvre encore, faisait donc
+                # defaire par le second tap ce que le premier avait reussi. Le
+                # mur etait alors compte comme non selectionne, et deux echecs
+                # de cette sorte l'ecartaient pour de bon.
+                if is_wall_selected():
+                    return True
             return False
 
         if not select():
