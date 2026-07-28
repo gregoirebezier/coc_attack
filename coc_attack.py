@@ -111,6 +111,16 @@ LOOT_X = (200, 380)
 # des remparts, et comme ce sont les plus grosses taches de l'image, le
 # programme cliquait sur ses propres boutons au lieu d'un mur.
 VILLAGE_AREA = (300, 130, 2120, 740)
+# Elements d'interface poses sur le village. Le bandeau de ressources en haut
+# a droite porte un bouton "+" par ressource qui ouvre la boutique de gemmes :
+# un point de recherche tombant dessus a suffi pour lancer un achat Google Play
+# et depenser sept cent quarante-trois gemmes. Aucun candidat ne doit y tomber.
+VILLAGE_UI_ZONES = [
+    (1890, 0, 2400, 440),    # or, elixir, elixir noir, gemmes et leurs "+"
+    (0, 0, 300, 1080),       # colonne de boutons a gauche
+    (2050, 440, 2400, 1080),  # boutons et boutique a droite
+    (0, 850, 900, 1080),     # rangee du bas : attaquer, potions, calendrier
+]
 # Un rempart se reconnait a deux couleurs, selon son niveau : le creme clair
 # de son dessus (240,240,200), et la coiffe doree (240,224,80) qui apparait
 # aux niveaux eleves. Chercher le seul creme laissait de cote les remparts
@@ -914,8 +924,13 @@ def wall_candidates(img):
     for yy in range(demi, mask.shape[0], WALL_GRID_STEP):
         for xx in range(demi, mask.shape[1], WALL_GRID_STEP):
             voisinage = mask[max(0, yy - 10):yy + 10, max(0, xx - 10):xx + 10]
-            if voisinage.size and voisinage.mean() > WALL_GRID_FILL:
-                points.append((float(xx + x0), float(yy + y0)))
+            if not (voisinage.size and voisinage.mean() > WALL_GRID_FILL):
+                continue
+            px, py = float(xx + x0), float(yy + y0)
+            if any(zx0 <= px <= zx1 and zy0 <= py <= zy1
+                   for zx0, zy0, zx1, zy1 in VILLAGE_UI_ZONES):
+                continue
+            points.append((px, py))
     return points
 
 def load_wall_cache():
