@@ -1693,6 +1693,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         apprend_motif(depart, point)
 
         paye = False
+        issues = set()
         for resource in [r for r in order if r not in epuisees]:
             # Selon la facon dont l'essai precedent s'est termine, le mur est
             # encore selectionne ou non. Retaper un mur deja selectionne le
@@ -1701,6 +1702,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             if not is_wall_selected() and not select():
                 break
             issue = pay_upgrade(phone, templates, resource)
+            issues.add(issue)
             if issue == "paye":
                 upgraded += 1
                 paye = True
@@ -1740,6 +1742,21 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # de la boucle ici revenait a ne jamais essayer l'elixir, meme avec
             # des dizaines de millions en reserve. On passe au mur suivant,
             # cette fois en commencant par la ressource qui reste.
+            if issues == {"indisponible"}:
+                # Le mur s'est bien selectionne - son menu s'est ouvert et
+                # portait son nom - mais le jeu n'y propose aucune
+                # amelioration, dans aucune des deux ressources : il est au
+                # niveau maximum. Y revenir phase apres phase coutait cinq
+                # secondes a chaque fois, et le village en compte des rangees
+                # entieres. On l'ecarte sans rien conclure sur les reserves :
+                # c'est ce mur-la qui n'a plus rien a monter, pas l'or ou
+                # l'elixir qui manquent. L'alarme reste donc armee, et
+                # parlerait quand meme si la lecture des boutons tombait en
+                # panne au point de faire passer tous les murs pour maximes.
+                if not proche(point, ecartes):
+                    ecartes.append(point)
+                if verbose:
+                    print(f"    mur ({int(point[0])},{int(point[1])}) au maximum, ecarte")
             if len(epuisees) >= len(order):
                 if verbose:
                     print(f"[i] plus assez de {' ni de '.join(sorted(epuisees))}"
