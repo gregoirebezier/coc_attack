@@ -117,8 +117,9 @@ VILLAGE_AREA = (300, 130, 2120, 740)
 # deja montes, qu'il faut pourtant continuer a ameliorer.
 WALL_CREAM = dict(r_min=215, g_min=198, b_min=165, rb_min=28, rb_max=80, rg_max=32)
 WALL_GOLD = dict(r_min=215, g_min=195, b_max=125, rb_min=130, rg_max=45)
-WALL_AREA_MIN = 400
-WALL_MIN_RATIO = 1.8     # allongement minimal pour distinguer un mur d'un toit
+WALL_DILATE = 13         # fusionne le damier des murs avant l'echantillonnage
+WALL_GRID_STEP = 60      # espacement des points candidats, en pixels
+WALL_GRID_FILL = 0.6     # part de mur exigee autour d'un point
 # Le village ne bouge pas d'une attaque a l'autre : ce que l'on a identifie une
 # fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
 # ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
@@ -881,11 +882,17 @@ def deploy_all(phone, templates, args, rng, verbose=True):
 # --------------------------------------------------------------------------
 
 def wall_candidates(img):
-    """Points a taper pour selectionner un rempart, du plus gros au plus petit.
+    """Points a taper pour selectionner un rempart.
 
-    On cherche le dessus creme des murs plutot que leur liseré doré : le doré
-    est trop fin et se confond avec les dorures des batiments, alors que le
-    creme forme de larges rubans que seuls les remparts presentent.
+    On cherche le dessus creme des murs et leur coiffe doree, puis on
+    echantillonne une grille de points la ou la couleur domine. Les reperer
+    par leur forme ne marchait que sur des remparts isoles : regroupes en bloc
+    compact, ils formaient une tache trapue que le filtre d'allongement
+    rejetait, et le programme n'en trouvait plus un seul.
+
+    Le masque est dilate avant l'echantillonnage : les murs se dessinent en
+    damier de petits carres separes de creux sombres, et sans cela aucun
+    voisinage n'atteint la densite voulue.
     """
     import cv2
     x0, y0, x1, y1 = VILLAGE_AREA
@@ -898,24 +905,18 @@ def wall_candidates(img):
     o = WALL_GOLD
     coiffe = ((r > o["r_min"]) & (g > o["g_min"]) & (b < o["b_max"]) &
               (r - b > o["rb_min"]) & (abs(r - g) < o["rg_max"]))
-    mask = (creme | coiffe).astype(np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE,
-                            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
-    n, _lab, stats, cent = cv2.connectedComponentsWithStats(mask, 8)
-    keep = []
-    for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] <= WALL_AREA_MIN:
-            continue
-        w, h = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-        # Un rempart est un ruban : long dans un sens, mince dans l'autre. Un
-        # toit de batiment, lui, est trapu. Ce seul critere ecarte l'essentiel
-        # des batiments clairs, que le controle du titre rejetait ensuite au
-        # prix de plusieurs secondes perdues a chaque fois.
-        if max(w, h) / max(1, min(w, h)) >= WALL_MIN_RATIO:
-            keep.append(i)
-    keep.sort(key=lambda i: -stats[i, cv2.CC_STAT_AREA])
-    return [(cent[i][0] + x0, cent[i][1] + y0) for i in keep]
+    mask = cv2.dilate((creme | coiffe).astype(np.uint8),
+                      cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
+                                                (WALL_DILATE, WALL_DILATE)))
 
+    points = []
+    demi = WALL_GRID_STEP // 2
+    for yy in range(demi, mask.shape[0], WALL_GRID_STEP):
+        for xx in range(demi, mask.shape[1], WALL_GRID_STEP):
+            voisinage = mask[max(0, yy - 10):yy + 10, max(0, xx - 10):xx + 10]
+            if voisinage.size and voisinage.mean() > WALL_GRID_FILL:
+                points.append((float(xx + x0), float(yy + y0)))
+    return points
 
 def load_wall_cache():
     try:
