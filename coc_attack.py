@@ -1122,6 +1122,13 @@ def pay_upgrade(phone, templates, resource):
         # conclure trop tot faisait renoncer a un mur parfaitement payable.
         time.sleep(1.3)
         img = phone.screenshot()
+    if not confirm_dialog_open(img) and not cancel_dialog_open(img):
+        # Toujours rien : le menu s'animait encore et a avale le clic. C'est
+        # systematiquement la premiere ressource tentee qui en faisait les
+        # frais, la seconde reussissant sur le meme mur au meme prix.
+        phone.tap(*boutons[resource])
+        time.sleep(1.8)
+        img = phone.screenshot()
     if cancel_dialog_open(img):
         # Fenetre Annuler / OK : le jeu propose autre chose que l'amelioration
         # du seul mur vise, typiquement un lot a plusieurs millions. On refuse.
