@@ -1274,6 +1274,7 @@ def pay_upgrade(phone, templates, resource):
         # Le jeu ne propose pas cette amelioration : mur au maximum, rangee
         # deja en chantier, ou reserve trop juste.
         print(f"    [{resource}] bouton absent du menu")
+        record_unknown(menu, f"sans-bouton-{resource}")
         return "indisponible"
 
     if not cost_affordable(menu, boutons[resource][0]):
