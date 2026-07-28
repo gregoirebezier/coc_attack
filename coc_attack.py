@@ -470,7 +470,15 @@ def idle_popup_open(img):
     big = Image.fromarray(255 - mask).resize(((x1 - x0) * 2, (y1 - y0) * 2),
                                              Image.LANCZOS)
     texte = ocr(big, "--psm 6").lower()
-    return "inactivit" in texte or "quelqu" in texte
+    # Le jeu coupe la partie pour plusieurs raisons, et n'emploie pas les memes
+    # mots selon laquelle. "Connexion perdue - Un autre appareil se connecte a
+    # ce village" a bloque le programme cinquante-neuf minutes : le panneau
+    # etait bien reconnu, sombre a quatre-vingt-seize pour cent, mais son texte
+    # ne parlait ni d'inactivite ni de quelqu'un d'autre. Tous ces panneaux se
+    # refermant par le meme bouton Recharger, on les traite ensemble.
+    return any(mot in texte for mot in
+               ("inactivit", "quelqu", "connexion perdue", "autre appareil",
+                "recharger", "reconnect"))
 
 
 def identify(img, templates):
