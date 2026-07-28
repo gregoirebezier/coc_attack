@@ -202,7 +202,8 @@ SOURCE_POINT = {}        # d'ou vient chaque candidat, pour le diagnostic
 # retenues d'une fois sur l'autre ne voudraient rien dire.
 RECENTRE_DEPART = (1850, 250)
 RECENTRE_ARRIVEE = (1050, 850)
-RECENTRE_FOIS = 2
+RECENTRE_MAX = 6         # glissements au plus pour atteindre la butee
+RECENTRE_STABLE = 3.0    # ecart moyen en deca duquel la vue ne bouge plus
 
 EXPLORE_STEP = 90        # espacement de la grille d'exploration
 EXPLORE_PAR_PHASE = 6    # points explores a chaque passage
@@ -231,11 +232,11 @@ def zone_recherche():
 # Change des que la facon de trouver les remparts change : le cache des points
 # ecartes se purge alors de lui-meme, au lieu de faire porter a la detection
 # actuelle les erreurs de la precedente.
-DETECTEUR_VERSION = "motif-1"
+DETECTEUR_VERSION = "motif-2-vue-stable"
 # Change des que la regle qui declare un mur au maximum change. Ce classement
 # etant definitif, une regle trop laxative laisse derriere elle des remparts
 # retires du vivier pour toujours : il faut pouvoir les rendre.
-REGLE_MAXIMES = "complet-1"
+REGLE_MAXIMES = "complet-2-vue-stable"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
@@ -1360,14 +1361,14 @@ def load_wall_cache():
     try:
         with open(WALL_CACHE) as f:
             data = json.load(f)
+        if data.get("detecteur") != DETECTEUR_VERSION:
+            # Tout ce cache est fait de coordonnees, et elles ne valent que
+            # sous la vue qui les a produites. Un changement de detecteur ou de
+            # facon de recentrer les rend caduques, remparts confirmes compris.
+            return [], [], [], []
         murs = [tuple(p) for p in data.get("murs", [])]
-        # Les remparts au maximum, eux, restent vrais quel que soit le
-        # detecteur : une amelioration de mur est instantanee dans le jeu, un
-        # mur sans bouton n'est donc jamais un chantier en cours, il est fini.
         maximes = ([tuple(p) for p in data.get("maximes", [])]
                    if data.get("regle_maximes") == REGLE_MAXIMES else [])
-        if data.get("detecteur") != DETECTEUR_VERSION:
-            return murs, [], [], maximes
         return (murs,
                 [tuple(p) for p in data.get("autres", [])],
                 [tuple(p) for p in data.get("suspects", [])],
@@ -1735,11 +1736,27 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         return 0
     # La vue peut avoir ete laissee de travers : on la ramene contre sa butee
     # pour voir tous les remparts, et toujours sous le meme angle.
-    for _ in range(RECENTRE_FOIS):
+    #
+    # On glisse jusqu'a ce que l'image cesse de bouger, au lieu d'un nombre
+    # fixe de fois. Deux glissements ne suffisaient pas toujours a atteindre la
+    # butee, et tout le cache est positionnel : le bloc de remparts s'est
+    # retrouve a x 660-1400 lors d'une phase et a x 400-1120 lors d'une autre.
+    # Les points memorises tombaient alors a cote - trente des quarante echecs
+    # de selection venaient de la, contre dix de la detection - et les murs
+    # notes au maximum risquaient d'ecarter de vrais remparts glisses a leur
+    # place.
+    depart = phone.screenshot()
+    for _ in range(RECENTRE_MAX):
         phone.glisse(*RECENTRE_DEPART, *RECENTRE_ARRIVEE)
         time.sleep(1.2)
-
-    depart = phone.screenshot()
+        apres = phone.screenshot()
+        bouge = float(np.abs(apres.astype(np.int32)
+                             - depart.astype(np.int32)).mean())
+        depart = apres
+        if bouge < RECENTRE_STABLE:
+            break
+    else:
+        print(f"[i] vue non stabilisee apres {RECENTRE_MAX} glissements")
     gemmes_avant = read_gems(depart, templates)
 
     upgraded = 0
