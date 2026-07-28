@@ -129,7 +129,13 @@ PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # du village. Un crane pale y a suffi : a cent soixante-dix, son gris passait
 # pour du texte, cinquante-neuf pour cent de la case s'allumait et les chiffres
 # s'y noyaient - l'or devenait illisible, l'elixir perdait son premier chiffre.
-STOCK_SEUILS = (200, 215, 230, 245)   # clartes essayees pour les chiffres
+# Facons d'isoler les chiffres, essayees dans cet ordre. Les clartes absolues
+# suffisent sur un fond uni. Les deux dernieres travaillent au contraste local,
+# seul recours quand le fond change au milieu du nombre : la barre de ressource
+# se remplit, et sa portion pleine s'arrete parfois entre deux chiffres - les
+# premiers sur clair, les derniers sur sombre. Le petit voisinage suit ce
+# changement de plus pres que le grand.
+STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
 # Prix des ameliorations de rempart, donnes par le joueur : 4,2 millions pour
 # un beige, 6 pour un jaune ou un dore noir. En dessous du moins cher, aucun
 # mur n'est payable et la phase ne peut que perdre son temps - une minute a
@@ -1234,8 +1240,11 @@ MURS_INTERDITS = False     # coupe-circuit arme si des gemmes ont ete depensees
 _STOCKS = []               # historique (or, elixir) des phases sans amelioration
 
 
-def masque_chiffres(z, seuil):
-    """Isole les chiffres d'une case. Seuil None : contraste local.
+def masque_chiffres(z, methode):
+    """Isole les chiffres d'une case.
+
+    `methode` est soit une clarte absolue, soit un couple (voisinage, marge)
+    pour un seuillage au contraste local.
 
     La barre de ressources se remplit : sa portion pleine est claire, et quand
     elle passe sous les chiffres blancs, aucune clarte absolue ne les separe
@@ -1243,18 +1252,19 @@ def masque_chiffres(z, seuil):
     reserves. Le contraste local, lui, voit encore le liseré sombre qui borde
     chaque chiffre.
     """
-    if seuil is not None:
-        return (z.min(axis=2) > seuil).astype(np.uint8) * 255
+    if isinstance(methode, int):
+        return (z.min(axis=2) > methode).astype(np.uint8) * 255
     import cv2
+    voisinage, marge = methode
     gris = cv2.cvtColor(z.astype(np.uint8), cv2.COLOR_RGB2GRAY)
     return cv2.adaptiveThreshold(gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                 cv2.THRESH_BINARY, 41, -12)
+                                 cv2.THRESH_BINARY, voisinage, marge)
 
 
 def compte_colonnes(z):
     """Combien de chiffres une case en montre, sans passer par l'OCR."""
     comptes = []
-    for seuil in STOCK_SEUILS + (None,):
+    for seuil in STOCK_SEUILS:
         colonnes = (masque_chiffres(z, seuil) > 0).any(axis=0)
         n, largeur = 0, 0
         for pleine in colonnes:
@@ -1286,7 +1296,7 @@ def read_stocks(img, templates):
         for bord in STOCK_BORDS:
             z = img[y0:y1, x0:bord]
             attendus = compte_colonnes(z)
-            for seuil in STOCK_SEUILS + (None,):
+            for seuil in STOCK_SEUILS:
                 mask = masque_chiffres(z, seuil)
                 big = Image.fromarray(255 - mask).resize(((bord - x0) * 6,
                                                           (y1 - y0) * 6),
