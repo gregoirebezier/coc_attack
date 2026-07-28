@@ -299,6 +299,10 @@ def record_unknown(img, tag, limit=300):
 CANCEL_PANEL = (760, 240, 1660, 800)
 CANCEL_BOX = (880, 630, 1120, 755)
 CANCEL_BUTTON = (990, 690)
+CANCEL_OK = (1406, 690)
+# Texte de la fenetre : il dit si l'on s'apprete a quitter le jeu ou a
+# ameliorer des remparts, ce que les boutons seuls ne distinguent pas.
+DIALOG_TEXT_BOX = (780, 430, 1680, 560)
 
 
 def cancel_dialog_open(img):
@@ -1026,6 +1030,20 @@ def upgrade_buttons(img):
     return trouves
 
 
+def texte_dialogue(img):
+    """Message d'une fenetre Annuler / OK, lu par OCR. Vide si illisible."""
+    try:
+        import pytesseract
+    except ImportError:
+        return ""
+    x0, y0, x1, y1 = DIALOG_TEXT_BOX
+    c = img[y0:y1, x0:x1]
+    mask = (c.max(axis=2) < 120).astype(np.uint8) * 255
+    big = Image.fromarray(255 - mask).resize(((x1 - x0) * 2, (y1 - y0) * 2),
+                                             Image.LANCZOS)
+    return pytesseract.image_to_string(big, config="--psm 6")
+
+
 def titre_est_rempart(titre):
     """Le titre lu designe-t-il un rempart ?
 
@@ -1102,16 +1120,32 @@ def pay_upgrade(phone, templates, resource):
     if cancel_dialog_open(img):
         # Fenetre Annuler / OK : le jeu propose autre chose que l'amelioration
         # du seul mur vise, typiquement un lot a plusieurs millions. On refuse.
-        # Le jeu est en mode selection multiple : son titre porte un "xN" et
-        # sa confirmation est la fenetre Annuler / OK, pas celle d'un mur seul.
-        # On refuse, puis on quitte ce mode pour retrouver le menu ordinaire.
-        print(f"    [{resource}] mode selection multiple, on en sort")
-        record_unknown(menu, f"menu-groupe-{resource}")
-        phone.tap(*CANCEL_BUTTON)
-        time.sleep(1.2)
-        phone.back()
-        time.sleep(1.0)
-        return "indisponible"
+        # Aux niveaux eleves, le menu du rempart n'a plus de fenetre de
+        # confirmation propre : sa validation est cette fenetre Annuler / OK.
+        # La refuser revenait a ne jamais monter ces murs. On ne valide qu'apres
+        # avoir lu son message : il doit parler de remparts, jamais de quitter
+        # le jeu, dont le bouton OK ferme Clash of Clans.
+        texte = texte_dialogue(img)
+        if "quitter" in texte.lower() or not titre_est_rempart(texte):
+            print(f"    [{resource}] fenetre inattendue, refusee")
+            record_unknown(img, f"dialogue-{resource}")
+            phone.tap(*CANCEL_BUTTON)
+            time.sleep(1.2)
+            return "indisponible"
+
+        x0, y0, x1, y1 = HUD_BOX
+        avant = img[y0:y1, x0:x1]
+        phone.tap(*CANCEL_OK)
+        time.sleep(2.2)
+        img = phone.screenshot()
+        ecart = float(np.abs(avant.astype(np.int32)
+                             - img[y0:y1, x0:x1].astype(np.int32)).mean())
+        paye = ecart > HUD_CHANGED_MAD
+        print(f"    [{resource}] validee, ecart des reserves = {ecart:.1f}"
+              f" -> {'paye' if paye else 'refuse'}")
+        if not paye:
+            back_to_home(phone, templates)
+        return "paye" if paye else "refuse"
     if not confirm_dialog_open(img):
         print(f"    [{resource}] aucune fenetre de confirmation")
         record_unknown(img, f"ameliorer-{resource}")
