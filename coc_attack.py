@@ -252,6 +252,21 @@ def load_templates():
     return tpl
 
 
+def ocr(image, config):
+    """Reconnaissance de texte, jamais fatale.
+
+    Tesseract est un programme externe : il lui arrive d'echouer sur une image
+    donnee. L'exception remontait alors jusqu'a interrompre l'attaque en cours,
+    alors qu'une lecture manquee se traite tres bien - on attaque le village
+    dans le doute, on passe au mur suivant.
+    """
+    try:
+        import pytesseract
+        return pytesseract.image_to_string(image, config=config)
+    except Exception:                                    # noqa: BLE001
+        return ""
+
+
 UNKNOWN_DIR = None      # dossier d'archivage des ecrans non reconnus
 _unknown_seen = {}
 
@@ -414,8 +429,7 @@ def read_loot(img):
             mask = (crop.min(axis=2) > seuil).astype(np.uint8) * 255
             big = Image.fromarray(255 - mask).resize(
                 ((x1 - x0) * echelle, (y1 - y0) * echelle), Image.LANCZOS)
-            txt = pytesseract.image_to_string(
-                big, config="--psm 7 -c tessedit_char_whitelist=0123456789")
+            txt = ocr(big, "--psm 7 -c tessedit_char_whitelist=0123456789")
             chiffres = re.sub(r"\D", "", txt)
             valeur = int(chiffres) if chiffres else None
             # Une lecture dont la longueur ne colle pas aux chiffres visibles
@@ -943,7 +957,7 @@ def selected_title(img):
     c = img[y0:y1, x0:x1]
     mask = (c.min(axis=2) > 150).astype(np.uint8) * 255
     big = Image.fromarray(255 - mask).resize(((x1 - x0) * 3, (y1 - y0) * 3), Image.LANCZOS)
-    return pytesseract.image_to_string(big, config="--psm 7").strip()
+    return ocr(big, "--psm 7").strip()
 
 
 def menu_buttons(img):
@@ -1041,7 +1055,7 @@ def texte_dialogue(img):
     mask = (c.max(axis=2) < 120).astype(np.uint8) * 255
     big = Image.fromarray(255 - mask).resize(((x1 - x0) * 2, (y1 - y0) * 2),
                                              Image.LANCZOS)
-    return pytesseract.image_to_string(big, config="--psm 6")
+    return ocr(big, "--psm 6")
 
 
 def titre_est_rempart(titre):
