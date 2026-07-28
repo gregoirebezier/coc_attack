@@ -142,13 +142,10 @@ TITLE_BOX = (850, 690, 1600, 748)      # "Rempart (Niveau 17)"
 BUTTON_ROW_Y = (782, 798)
 BUTTON_MIN_W, BUTTON_MAX_W = 140, 215
 BUTTON_TAP_Y = 855
-# Seuil de presence d'une icone de ressource. Il doit laisser passer un vrai
-# bouton d'amelioration (3.9 pour la piece, 5.9 pour la goutte) sans retenir
-# "Choisir rangee", dont les fleches vertes tirent assez sur le jaune pour
-# marquer 2.6. Tapant ce bouton par erreur, le programme selectionnait une
-# rangee entiere de remparts et se retrouvait dans un mode ou ses reperes ne
-# valaient plus rien.
-ICON_MIN = 3.2
+# Seuil de presence d'une icone de ressource. Avec la fenetre resserree, un
+# vrai bouton marque 4.4 pour la piece et 10.0 pour la goutte, contre 0.0 pour
+# tout le reste : la separation ne tient plus a un reglage fin.
+ICON_MIN = 2.5
 # "Ameliorer" ouvre une fenetre de confirmation avant de debiter. Son grand
 # panneau de texte est presque entierement blanc (88 % contre moins de 5 %
 # partout ailleurs), ce qui la rend impossible a confondre.
@@ -1040,7 +1037,12 @@ def upgrade_buttons(img):
     # pris pour le bouton en or et lancait une amelioration groupee a plusieurs
     # millions, que le jeu proposait alors de confirmer.
     for cx in menu_buttons(img)[-2:]:
-        bandeau = img[750:798, cx + 35:cx + 125]
+        # La fenetre reste dans la largeur du bouton. Debordant de trente-cinq
+        # pixels, elle mordait sur le village pour le dernier bouton du menu :
+        # les remparts jaunes du decor y marquaient 3.8, autant qu'une vraie
+        # piece d'or. "Choisir rangee" passait ainsi pour un bouton
+        # d'amelioration, et le taper selectionnait une rangee entiere.
+        bandeau = img[750:798, cx + 35:cx + 88]
         r, g, b = bandeau[:, :, 0], bandeau[:, :, 1], bandeau[:, :, 2]
         piece = float(((r > 200) & (g > 150) & (g < 225) & (b < 110)).mean()) * 100
         goutte = float(((r > 150) & (b > 150) & (g < 130)).mean()) * 100
