@@ -1777,6 +1777,17 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # phases, et comparer des coordonnees a un ecran pris plus tard fait passer
     # des points justes pour des points en pleine foret.
     try:
+        if os.path.exists(VUE_PHASE):
+            # L'ecart avec la phase precedente mesure la reproductibilite du
+            # recentrage. Tout le cache des remparts est fait de coordonnees :
+            # si la vue ne revient pas au meme endroit, les points memorises
+            # tombent a cote, et c'est bien d'eux que viennent la plupart des
+            # selections ratees.
+            ancienne = np.asarray(Image.open(VUE_PHASE).convert("RGB"))
+            if ancienne.shape == depart.shape:
+                ecart = float(np.abs(ancienne.astype(np.int32)
+                                     - depart.astype(np.int32)).mean())
+                print(f"[i] vue : ecart avec la phase precedente = {ecart:.1f}")
         Image.fromarray(depart.astype(np.uint8)).save(VUE_PHASE)
     except (OSError, ValueError):
         pass
