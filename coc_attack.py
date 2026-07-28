@@ -98,6 +98,17 @@ UI_ZONES = [
     (0, 0, 540, 120),        # nom du defenseur
 ]
 
+# Fenetre "Il y a quelqu'un ?", affichee apres une longue inactivite. Elle
+# laisse le village visible derriere elle, si bien que la reconnaissance le
+# voit toujours : le programme croirait etre au village et cliquerait dans le
+# vide indefiniment. On la reconnait a son panneau sombre - 96 % de pixels
+# sombres contre au plus 37 % sur tout autre ecran - puis on confirme par son
+# texte, avant de recharger le jeu.
+IDLE_PANEL = (560, 330, 2010, 750)
+IDLE_TEXT_BOX = (580, 380, 1700, 560)
+IDLE_DARK_MIN = 70.0
+IDLE_RELOAD = (728, 674)          # "Recharger le jeu"
+
 # Butin affiche en haut a gauche. L elixir noir n entre pas dans la decision
 # et n est donc pas lu.
 LOOT_LINES = {"or": (148, 188), "elixir": (204, 244)}
@@ -349,6 +360,24 @@ def cancel_dialog_open(img):
     return float(orange) * 100 > 5
 
 
+def idle_popup_open(img):
+    """La fenetre de deconnexion pour inactivite est-elle affichee ?"""
+    x0, y0, x1, y1 = IDLE_PANEL
+    c = img[y0:y1, x0:x1]
+    r, g, b = c[:, :, 0], c[:, :, 1], c[:, :, 2]
+    sombre = float(((r < 95) & (g < 70) & (b < 75) & (r >= g)).mean()) * 100
+    if sombre < IDLE_DARK_MIN:
+        return False
+    # Le panneau sombre ne suffit pas : on verifie ce qu'il dit.
+    x0, y0, x1, y1 = IDLE_TEXT_BOX
+    c = img[y0:y1, x0:x1]
+    mask = (c.min(axis=2) > 150).astype(np.uint8) * 255
+    big = Image.fromarray(255 - mask).resize(((x1 - x0) * 2, (y1 - y0) * 2),
+                                             Image.LANCZOS)
+    texte = ocr(big, "--psm 6").lower()
+    return "inactivit" in texte or "quelqu" in texte
+
+
 def identify(img, templates):
     """Renvoie (nom_ecran, score) du meilleur template, ou (None, score).
 
@@ -364,6 +393,8 @@ def identify(img, templates):
     # Ces deux fenetres assombrissent le village sans le masquer : en annulant
     # l'ecart de luminosite, la comparaison les prend pour l'ecran d'accueil.
     # Elles sont donc reconnues a leur contenu propre, avant les templates.
+    if idle_popup_open(img):
+        return "idle", 0.0
     if cancel_dialog_open(img):
         return "cancel", 0.0
     if confirm_dialog_open(img):
@@ -1112,6 +1143,10 @@ def back_to_home(phone, templates, tries=4):
         ecran = identify(img, templates)[0]
         if ecran == "home":
             return True
+        if ecran == "idle":
+            phone.tap(*IDLE_RELOAD)
+            time.sleep(12.0)
+            continue
         if ecran == "cancel":
             # C'est notre propre retour arriere qui l'a ouvert : on annule.
             phone.tap(*CANCEL_BUTTON)
@@ -1422,6 +1457,11 @@ def goto_battle(phone, templates, timeout=150):
 
         if screen == "battle":
             return True
+        if screen == "idle":
+            print("[i] deconnexion pour inactivite, rechargement du jeu")
+            phone.tap(*IDLE_RELOAD)
+            time.sleep(12.0)
+            continue
         if screen == "cancel":
             phone.tap(*CANCEL_BUTTON)
             time.sleep(1.2)
@@ -1504,6 +1544,10 @@ def end_battle(phone, templates, args):
             phone.tap(*SCREENS[screen]["tap"])
             unknown = 0
             time.sleep(3.0 if screen == "battle" else 2.0)
+            continue
+        if screen == "idle":
+            phone.tap(*IDLE_RELOAD)
+            time.sleep(12.0)
             continue
         if screen == "cancel":
             phone.tap(*CANCEL_BUTTON)
