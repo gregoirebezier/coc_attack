@@ -1438,6 +1438,16 @@ def back_to_home(phone, templates, tries=4):
         img = phone.screenshot()
         ecran = identify(img, templates)[0]
         if ecran == "home":
+            # Un menu de batiment ouvert, c'est encore le village : la boucle
+            # rendait la main sans le refermer. Le tap suivant servait alors a
+            # fermer ce menu au lieu de selectionner ce qu'il visait, et deux
+            # ratages de cette sorte ecartent un vrai rempart du vivier. On ne
+            # touche au bouton retour qu'apres avoir vu le menu, car au village
+            # sans menu il ouvre la confirmation de sortie du jeu.
+            if menu_open(img):
+                phone.back()
+                time.sleep(0.8)
+                continue
             return True
         if ecran == "idle":
             phone.tap(*IDLE_RELOAD)
