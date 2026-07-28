@@ -1131,7 +1131,12 @@ def pay_upgrade(phone, templates, resource):
         # avoir lu son message : il doit parler de remparts, jamais de quitter
         # le jeu, dont le bouton OK ferme Clash of Clans.
         texte = texte_dialogue(img)
-        if "quitter" in texte.lower() or not titre_est_rempart(texte):
+        # Le message doit annoncer un prix : une amelioration en affiche
+        # toujours un, la confirmation de sortie du jeu jamais. C'est le
+        # garde-fou decisif, car son bouton OK ferme Clash of Clans.
+        montant = re.search(r"\d[\d\s]{5,}", texte)
+        if ("quitter" in texte.lower() or not titre_est_rempart(texte)
+                or not montant):
             print(f"    [{resource}] fenetre inattendue, refusee")
             record_unknown(img, f"dialogue-{resource}")
             phone.tap(*CANCEL_BUTTON)
