@@ -213,7 +213,8 @@ SOURCE_POINT = {}        # d'ou vient chaque candidat, pour le diagnostic
 # retenues d'une fois sur l'autre ne voudraient rien dire.
 RECENTRE_DEPART = (1850, 250)
 RECENTRE_ARRIVEE = (1050, 850)
-RECENTRE_MAX = 6         # glissements au plus pour atteindre la butee
+RECENTRE_MIN = 3         # glissements au moins, un seul pouvant ne pas prendre
+RECENTRE_MAX = 8         # glissements au plus pour atteindre la butee
 RECENTRE_STABLE = 3.0    # ecart moyen en deca duquel la vue ne bouge plus
 
 EXPLORE_STEP = 90        # espacement de la grille d'exploration
@@ -1781,15 +1782,26 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # notes au maximum risquaient d'ecarter de vrais remparts glisses a leur
     # place.
     depart = phone.screenshot()
-    for _ in range(RECENTRE_MAX):
+    immobile = False
+    for n in range(RECENTRE_MAX):
         phone.glisse(*RECENTRE_DEPART, *RECENTRE_ARRIVEE)
         time.sleep(1.2)
         apres = phone.screenshot()
         bouge = float(np.abs(apres.astype(np.int32)
                              - depart.astype(np.int32)).mean())
         depart = apres
-        if bouge < RECENTRE_STABLE:
-            break
+        # Deux immobilites de suite, et jamais avant trois glissements. Un
+        # seul glissement qui ne prend pas - le jeu est encore occupe au retour
+        # au village - suffisait sinon a faire conclure "stable" alors qu'on
+        # n'avait pas bouge. Deux phases voisines se sont ainsi retrouvees
+        # l'une contre la butee, l'autre au milieu du village : un ecart moyen
+        # de soixante entre elles, quand le seuil d'immobilite est de trois.
+        if bouge < RECENTRE_STABLE and n + 1 >= RECENTRE_MIN:
+            if immobile:
+                break
+            immobile = True
+        else:
+            immobile = False
     else:
         print(f"[i] vue non stabilisee apres {RECENTRE_MAX} glissements")
     # La vue recentree, telle que la phase l'a vue. Sans elle, on ne peut pas
