@@ -250,11 +250,11 @@ def zone_recherche():
 # Change des que la facon de trouver les remparts change : le cache des points
 # ecartes se purge alors de lui-meme, au lieu de faire porter a la detection
 # actuelle les erreurs de la precedente.
-DETECTEUR_VERSION = "motif-3-butee"
+DETECTEUR_VERSION = "motif-4-recalage"
 # Change des que la regle qui declare un mur au maximum change. Ce classement
 # etant definitif, une regle trop laxative laisse derriere elle des remparts
 # retires du vivier pour toujours : il faut pouvoir les rendre.
-REGLE_MAXIMES = "complet-3-butee"
+REGLE_MAXIMES = "complet-4-recalage"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 VUE_PHASE = os.path.join(HERE, "vue.png")   # la vue recentree de la derniere phase
 VUE_PRECEDENTE = os.path.join(HERE, "vue_prec.png")   # celle d'avant, pour comparer
@@ -1872,8 +1872,23 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                                      - depart.astype(np.int32)).mean())
                 print(f"[i] vue : ecart avec la phase precedente = {ecart:.1f}")
         Image.fromarray(depart.astype(np.uint8)).save(VUE_PHASE)
+        if not os.path.exists(VUE_REFERENCE):
+            Image.fromarray(depart.astype(np.uint8)).save(VUE_REFERENCE)
     except (OSError, ValueError):
         pass
+
+    # Le cache est exprime dans la vue de reference. Le recentrage n'y ramene
+    # pas toujours la carte - le jeu avale les glissements qui suivent le
+    # premier, et deux phases voisines finissent a deux cent quarante pixels
+    # l'une de l'autre. Plutot que de s'acharner a forcer la camera, on mesure
+    # l'ecart et on recale les points. C'est une translation pure : la
+    # correspondance a plusieurs echelles donne son meilleur accord exactement
+    # a l'echelle un.
+    decalage = mesure_decalage(depart)
+    if decalage is None:
+        print("[i] repere de vue introuvable : cache ignore pour cette phase")
+    else:
+        print(f"[i] decalage de la vue : {decalage[0]:+.0f} {decalage[1]:+.0f}")
     gemmes_avant = read_gems(depart, templates)
 
     upgraded = 0
@@ -1890,6 +1905,16 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # phase, la liste repart de zero, et le meme leurre coute cinq secondes a
     # chaque attaque de la nuit.
     connus, ecartes, suspects, maximes = load_wall_cache()
+    if decalage is None:
+        # Sans repere, les coordonnees memorisees ne veulent rien dire ici. On
+        # travaille a la detection seule plutot que de taper au hasard, et on
+        # ne reecrira pas le cache avec des points qu'on ne saurait pas situer.
+        connus, ecartes, suspects, maximes = [], [], [], []
+    else:
+        dx, dy = decalage
+        vers_ecran = lambda l: [(x + dx, y + dy) for x, y in l]
+        connus, ecartes = vers_ecran(connus), vers_ecran(ecartes)
+        suspects, maximes = vers_ecran(suspects), vers_ecran(maximes)
     # Le budget doit couvrir les essais infructueux, pas seulement les
     # ameliorations : quinze essais s'epuisaient sur des points rates avant
     # d'atteindre un mur payable, et la phase se terminait sans rien monter
@@ -2139,7 +2164,11 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         print(f"[!] GEMMES DEPENSEES : {gemmes_avant} -> {gemmes_apres}. "
               "Amelioration des remparts desactivee.", flush=True)
 
-    save_wall_cache(connus, ecartes, suspects, maximes)
+    if decalage is not None:
+        dx, dy = decalage
+        vers_ref = lambda l: [(x - dx, y - dy) for x, y in l]
+        save_wall_cache(vers_ref(connus), vers_ref(ecartes),
+                        vers_ref(suspects), vers_ref(maximes))
     if verbose:
         print(f"[i] repere : {len(connus)} remparts connus, {len(ecartes)} points"
               f" ecartes, {len(maximes)} murs au maximum")
