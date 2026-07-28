@@ -1745,6 +1745,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
 
         paye = False
         issues = set()
+        # Quelles ressources ce mur aura reellement vu passer : une reserve
+        # deja jugee insuffisante est sautee, et conclure sur un examen
+        # partiel reviendrait a condamner un mur sans l'avoir teste.
+        ignorees = set(epuisees)
         for resource in [r for r in order if r not in epuisees]:
             # Selon la facon dont l'essai precedent s'est termine, le mur est
             # encore selectionne ou non. Retaper un mur deja selectionne le
@@ -1793,7 +1797,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # de la boucle ici revenait a ne jamais essayer l'elixir, meme avec
             # des dizaines de millions en reserve. On passe au mur suivant,
             # cette fois en commencant par la ressource qui reste.
-            if issues == {"indisponible"}:
+            if issues == {"indisponible"} and not ignorees:
                 # Le mur s'est bien selectionne - son menu s'est ouvert et
                 # portait son nom - mais le jeu n'y propose aucune
                 # amelioration, dans aucune des deux ressources : il est au
@@ -1804,6 +1808,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 # l'elixir qui manquent. L'alarme reste donc armee, et
                 # parlerait quand meme si la lecture des boutons tombait en
                 # panne au point de faire passer tous les murs pour maximes.
+                #
+                # Encore faut-il l'avoir vraiment constate : la conclusion ne
+                # vaut que si toutes les ressources ont ete essayees. Un mur a
+                # ete classe au maximum apres le seul examen de l'elixir, l'or
+                # ayant ete mis de cote plus tot dans la phase - alors qu'il y
+                # en avait sept millions. Ce classement etant definitif, il
+                # aurait retire ce rempart du vivier pour toujours.
                 if not proche(point, maximes):
                     maximes.append(point)
                 connus[:] = [p for p in connus if not proche(p, [point])]
