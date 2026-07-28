@@ -230,6 +230,10 @@ def zone_recherche():
 # ecartes se purge alors de lui-meme, au lieu de faire porter a la detection
 # actuelle les erreurs de la precedente.
 DETECTEUR_VERSION = "motif-1"
+# Change des que la regle qui declare un mur au maximum change. Ce classement
+# etant definitif, une regle trop laxative laisse derriere elle des remparts
+# retires du vivier pour toujours : il faut pouvoir les rendre.
+REGLE_MAXIMES = "complet-1"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
@@ -1264,7 +1268,8 @@ def load_wall_cache():
         # Les remparts au maximum, eux, restent vrais quel que soit le
         # detecteur : une amelioration de mur est instantanee dans le jeu, un
         # mur sans bouton n'est donc jamais un chantier en cours, il est fini.
-        maximes = [tuple(p) for p in data.get("maximes", [])]
+        maximes = ([tuple(p) for p in data.get("maximes", [])]
+                   if data.get("regle_maximes") == REGLE_MAXIMES else [])
         if data.get("detecteur") != DETECTEUR_VERSION:
             return murs, [], [], maximes
         return (murs,
@@ -1282,6 +1287,7 @@ def save_wall_cache(murs, autres, suspects, maximes):
                        "murs": [list(p) for p in murs[-400:]],
                        "autres": [list(p) for p in autres[-400:]],
                        "suspects": [list(p) for p in suspects[-400:]],
+                       "regle_maximes": REGLE_MAXIMES,
                        "maximes": [list(p) for p in maximes[-800:]]}, f)
     except OSError:
         pass
