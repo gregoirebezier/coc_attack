@@ -1794,8 +1794,23 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
 
     back_to_home(phone, templates)
     fin = phone.screenshot()
+    # Les reserves ne se lisent qu'au village. Le bilan est pris juste apres y
+    # etre revenu, quand l'ecran peut encore etre en train de s'installer : une
+    # lecture ratee la, et la surveillance saute son tour sans rien dire. C'est
+    # la panne qui laisse une alarme muette toute une nuit.
+    stocks = read_stocks(fin, templates)
+    for _ in range(3):
+        if stocks is not None:
+            break
+        time.sleep(1.5)
+        fin = phone.screenshot()
+        stocks = read_stocks(fin, templates)
+    if stocks is None:
+        print("[!] reserves illisibles : la surveillance ne peut rien conclure "
+              "sur cette phase", flush=True)
+        record_unknown(fin, "reserves-illisibles")
     gemmes_apres = read_gems(fin, templates)
-    surveille_stocks(read_stocks(fin, templates), upgraded, hors_portee, verbose)
+    surveille_stocks(stocks, upgraded, hors_portee, verbose)
     if (gemmes_avant is not None and gemmes_apres is not None
             and gemmes_apres < gemmes_avant):
         MURS_INTERDITS = True

@@ -4,7 +4,8 @@
 cd "$(dirname "$0")" || exit 1
 
 INTERVALLE=${INTERVALLE:-900}
-alertes_vues=0
+# On part de l'existant : ne signaler que ce qui arrive a partir de maintenant.
+alertes_vues=$(grep -c '^\[!\]' run.log)
 types_vus=$(ls unknown 2>/dev/null | sed 's/^[0-9-]*-//; s/\.png$//' | sort -u)
 
 while true; do
