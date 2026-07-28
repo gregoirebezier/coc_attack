@@ -1472,6 +1472,21 @@ def confirm_dialog_open(img):
     return float(white) * 100 > CONFIRM_WHITE_MIN
 
 
+DERNIER_RETOUR = "aucun"
+
+
+def retour(phone, raison):
+    """Appuie sur retour en retenant pourquoi.
+
+    Une confirmation de sortie du jeu ne peut naitre que d'un de ces appuis.
+    Sans savoir lequel, on ne corrige qu'a l'aveugle : trois tentatives s'y
+    sont deja usees.
+    """
+    global DERNIER_RETOUR
+    DERNIER_RETOUR = raison
+    phone.back()
+
+
 def back_to_home(phone, templates, tries=4):
     """Referme ce qui traine jusqu'a retrouver le village."""
     for i in range(tries):
@@ -1503,7 +1518,7 @@ def back_to_home(phone, templates, tries=4):
             time.sleep(1.2)
             continue
         if ecran == "confirm":
-            phone.back()        # fenetre d'amelioration : on la referme
+            retour(phone, "retour-village/confirm")
             time.sleep(1.2)
             continue
         if is_transition(img):
@@ -1511,7 +1526,7 @@ def back_to_home(phone, templates, tries=4):
             continue
         if i == tries - 1:
             record_unknown(img, "retour-village")
-        phone.back()
+        retour(phone, f"retour-village/ecran={ecran}")
         time.sleep(1.0)
     return identify(phone.screenshot(), templates)[0] == "home"
 
@@ -1621,7 +1636,7 @@ def pay_upgrade(phone, templates, resource):
                 time.sleep(1.0)
                 continue
             if confirm_dialog_open(shot):
-                phone.back()
+                retour(phone, "refus/confirm")
                 time.sleep(1.0)
                 continue
             # Plus aucune fenetre par-dessus : on est ressorti, que le menu du
@@ -1782,7 +1797,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # faut surtout pas appuyer sur retour : au village, cela ouvre la
             # confirmation de sortie du jeu.
             if menu_open(phone.screenshot()):
-                phone.back()
+                retour(phone, "selection-ratee/menu")
                 time.sleep(0.7)
             continue
 
@@ -1901,8 +1916,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         fin = phone.screenshot()
         stocks = read_stocks(fin, templates)
     if stocks is None:
-        print(f"[!] reserves illisibles ({identify(fin, templates)[0]}) : la "
-              "surveillance ne peut rien conclure sur cette phase", flush=True)
+        print(f"[!] reserves illisibles ({identify(fin, templates)[0]}, dernier "
+              f"retour : {DERNIER_RETOUR}) : la surveillance ne peut rien "
+              "conclure sur cette phase", flush=True)
         record_unknown(fin, "reserves-illisibles")
     gemmes_apres = read_gems(fin, templates)
     surveille_stocks(stocks, upgraded, hors_portee, verbose)
@@ -1956,7 +1972,7 @@ def goto_battle(phone, templates, timeout=150):
         if screen == "confirm":
             # Fenetre d'amelioration restee ouverte : elle n'a rien a faire
             # ici, on la referme sans y toucher.
-            phone.back()
+            retour(phone, "goto-battle/confirm")
             time.sleep(1.2)
             continue
         if screen is None:
@@ -1968,7 +1984,7 @@ def goto_battle(phone, templates, timeout=150):
             if unknown >= 3:
                 print(f"[i] ecran inconnu (score {score:.0f}), retour arriere")
                 record_unknown(img, "navigation")
-                phone.back()
+                retour(phone, "navigation/inconnu")
                 unknown = 0
             time.sleep(1.0)
             continue
@@ -2041,7 +2057,7 @@ def end_battle(phone, templates, args):
             time.sleep(1.2)
             continue
         if screen == "confirm":
-            phone.back()
+            retour(phone, "fin-combat/confirm")
             time.sleep(1.2)
             continue
         if is_transition(img):
@@ -2054,7 +2070,7 @@ def end_battle(phone, templates, args):
         # jusqu'ici tombait a cinquante pixels du bouton OK qui ferme le jeu.
         # Le retour arriere referme les fenetres sans ce risque, et la
         # confirmation de sortie qu'il declencherait est geree juste au-dessus.
-        phone.back()
+        retour(phone, "fin-combat/fermeture")
         time.sleep(2.0)
     return False
 
