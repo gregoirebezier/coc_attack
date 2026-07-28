@@ -25,17 +25,23 @@ RESUME_TOUS = 10         # frequence des points de situation, en attaques
 
 
 def programme_tourne():
-    """Le programme est-il en cours ?
+    """Le travail est-il toujours en cours ?
 
     On ne cherche pas la ligne de commande exacte : en se relancant pour
     prendre une correction, le programme reconstruit ses arguments dans un
-    autre ordre. Chercher "coc_attack.py --rounds" tel quel faisait alors
-    croire a un arret alors qu'il tournait toujours.
+    autre ordre. Chercher "coc_attack.py --rounds" tel quel faisait croire a
+    un arret alors qu'il tournait toujours.
+
+    Le superviseur compte autant que le programme lui-meme : entre deux
+    series il patiente une minute, pendant laquelle aucune attaque ne tourne
+    sans que rien ne soit arrete pour autant.
     """
     out = subprocess.run(["ps", "-eo", "pid,cmd"], capture_output=True, text=True).stdout
     for ligne in out.splitlines():
         if "grep" in ligne or "watch.py" in ligne:
             continue
+        if "run_forever" in ligne:
+            return True
         if "coc_attack.py" in ligne and "--rounds" in ligne:
             return True
     return False
