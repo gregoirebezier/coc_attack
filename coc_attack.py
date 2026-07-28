@@ -250,6 +250,7 @@ DETECTEUR_VERSION = "motif-2-vue-stable"
 REGLE_MAXIMES = "complet-2-vue-stable"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 VUE_PHASE = os.path.join(HERE, "vue.png")   # la vue recentree de la derniere phase
+VUE_PRECEDENTE = os.path.join(HERE, "vue_prec.png")   # celle d'avant, pour comparer
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
@@ -1803,6 +1804,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # tombent a cote, et c'est bien d'eux que viennent la plupart des
             # selections ratees.
             ancienne = np.asarray(Image.open(VUE_PHASE).convert("RGB"))
+            os.replace(VUE_PHASE, VUE_PRECEDENTE)
             if ancienne.shape == depart.shape:
                 ecart = float(np.abs(ancienne.astype(np.int32)
                                      - depart.astype(np.int32)).mean())
