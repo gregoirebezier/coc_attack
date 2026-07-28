@@ -1034,14 +1034,20 @@ def read_stocks(img, templates):
     return out
 
 
-def surveille_stocks(stocks, ameliores, verbose=True):
+def surveille_stocks(stocks, ameliores, prix_hors_portee, verbose=True):
     """Crie si les reserves montent sans qu'aucun rempart ne s'ameliore.
 
     C'est la panne qui ne laisse aucune trace : le programme attaque, ramene du
     butin, et le butin s'accumule. Ni erreur, ni message d'echec - seulement des
     reserves qui gonflent pendant que rien ne se construit.
+
+    Encore faut-il que le blocage soit technique. Quand le jeu a lui-meme
+    signale que le prix depassait les reserves - bouton masque ou prix en rouge
+    - il n'y a rien a corriger : les remparts coutent simplement plus que ce
+    qu'une attaque rapporte. Crier dans ce cas ferait de l'alarme un bruit de
+    fond, et le jour ou elle aurait raison, plus personne ne l'ecouterait.
     """
-    if ameliores > 0:
+    if ameliores > 0 or prix_hors_portee:
         _STOCKS.clear()
         return
     if stocks is None:
@@ -1275,13 +1281,13 @@ def pay_upgrade(phone, templates, resource):
         # deja en chantier, ou reserve trop juste.
         print(f"    [{resource}] bouton absent du menu")
         record_unknown(menu, f"sans-bouton-{resource}")
-        return "indisponible"
+        return "hors-portee"
 
     if not cost_affordable(menu, boutons[resource][0]):
         # Le prix s'affiche en rouge : inutile de cliquer. On s'epargne la
         # fenetre d'achat de gemmes et les quinze secondes qu'elle coute.
         print(f"    [{resource}] prix en rouge, reserve insuffisante")
-        return "refuse"
+        return "hors-portee"
 
     phone.tap(*boutons[resource])
     time.sleep(1.5)
@@ -1390,6 +1396,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # qui manque.
     order = ["or", "elixir"]
     epuisees = set()        # reserves dont le paiement a deja ete refuse
+    hors_portee = False     # le jeu a signale un prix superieur aux reserves
     # Les suspects se conservent d'une attaque a l'autre, sans quoi la regle
     # des deux echecs ne se declenche jamais : un point rate une fois par
     # phase, la liste repart de zero, et le meme leurre coute cinq secondes a
@@ -1506,6 +1513,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 if verbose:
                     print(f"[+] rempart ameliore en {resource}")
                 break
+            if issue == "hors-portee":
+                hors_portee = True
+                epuisees.add(resource)
             if issue == "refuse":
                 # Le paiement a bien ete refuse : cette reserve ne suffit plus
                 # et ne remontera pas d'ici la fin de la serie. Inutile de la
@@ -1538,7 +1548,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     back_to_home(phone, templates)
     fin = phone.screenshot()
     gemmes_apres = read_gems(fin, templates)
-    surveille_stocks(read_stocks(fin, templates), upgraded, verbose)
+    surveille_stocks(read_stocks(fin, templates), upgraded, hors_portee, verbose)
     if (gemmes_avant is not None and gemmes_apres is not None
             and gemmes_apres < gemmes_avant):
         MURS_INTERDITS = True
