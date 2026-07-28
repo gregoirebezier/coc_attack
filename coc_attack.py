@@ -118,7 +118,11 @@ GEM_BOX = (2000, 335, 2210, 392)
 # rempart ne s'ameliore est le signe d'une panne silencieuse : le programme
 # attaque et ramene du butin, mais ne trouve plus de mur ou ne parvient plus a
 # le selectionner. Rien dans le journal ne le trahit autrement.
-STOCK_LINES = {"or": (1975, 42, 2170, 84), "elixir": (1975, 146, 2170, 188)}
+# La case va jusqu'a 2185 : a 2170, un montant a sept chiffres larges debordait
+# et perdait le dernier, 5 668 572 se lisant 566 857. Les icones de ressource
+# ne genent pas, leur jaune et leur magenta n'ayant pas les trois composantes
+# claires qu'exige le masque des chiffres.
+STOCK_LINES = {"or": (1975, 42, 2185, 84), "elixir": (1975, 146, 2185, 188)}
 PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # Les chiffres sont blancs, mais la barre de ressources se detache sur le decor
 # du village. Un crane pale y a suffi : a cent soixante-dix, son gris passait
