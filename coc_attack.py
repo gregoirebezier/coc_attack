@@ -163,6 +163,16 @@ WALL_MAJOR_RATIO = 0.12
 # suite, des murs parfaitement ameliorables sont restes invisibles parce que
 # leur couleur n'avait pas ete prevue. Quelques points au hasard par phase
 # suffisent a les decouvrir, et le cache retient ce qui a repondu.
+# Recentrage de la vue avant de chercher les remparts. Le jeu laisse le joueur
+# deplacer sa carte, et le programme ne voit que ce qui est a l'ecran : une vue
+# restee de travers lui cachait la moitie des murs. Le glissement en diagonale
+# pousse la carte contre sa butee, ce qui ramene les remparts au centre et,
+# surtout, donne un cadrage toujours identique - sans quoi les positions
+# retenues d'une fois sur l'autre ne voudraient rien dire.
+RECENTRE_DEPART = (1850, 250)
+RECENTRE_ARRIVEE = (1050, 850)
+RECENTRE_FOIS = 2
+
 EXPLORE_STEP = 90        # espacement de la grille d'exploration
 EXPLORE_PAR_PHASE = 6    # points explores a chaque passage
 
@@ -271,6 +281,12 @@ class Phone:
         cx, cy = self._pt(sx, sy)
         taps = ";".join(f"input tap {x} {y}" for x, y in (self._pt(*p) for p in points))
         self._adb("shell", f"input tap {cx} {cy};{taps}")
+
+    def glisse(self, x1, y1, x2, y2, ms=500):
+        """Fait glisser un doigt : deplace la carte du village."""
+        ax, ay = self._pt(x1, y1)
+        bx, by = self._pt(x2, y2)
+        self._adb("shell", "input", "swipe", str(ax), str(ay), str(bx), str(by), str(int(ms)))
 
     def back(self):
         self._adb("shell", "input", "keyevent", "4")
@@ -1426,6 +1442,12 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     if MURS_INTERDITS:
         print("[!] remparts desactives : des gemmes ont ete depensees plus tot")
         return 0
+    # La vue peut avoir ete laissee de travers : on la ramene contre sa butee
+    # pour voir tous les remparts, et toujours sous le meme angle.
+    for _ in range(RECENTRE_FOIS):
+        phone.glisse(*RECENTRE_DEPART, *RECENTRE_ARRIVEE)
+        time.sleep(1.2)
+
     depart = phone.screenshot()
     gemmes_avant = read_gems(depart, templates)
 
