@@ -1178,7 +1178,10 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # Les points deja reconnus comme remparts passent devant ; ceux ou
         # l'on est tombe sur autre chose sont ecartes d'office.
         detectes = [p for p in wall_candidates(img) if not proche(p, ecartes)]
-        cands = [p for p in connus if not proche(p, tried)] + \
+        # Les points connus sont eux aussi soumis a la liste des ecartes :
+        # sans quoi un point devenu muet y restait en tete et etait reessaye a
+        # chaque phase, jusqu'a epuiser tout le budget en echecs.
+        cands = [p for p in connus if not proche(p, tried) and not proche(p, ecartes)] + \
                 [p for p in detectes if not proche(p, tried) and not proche(p, connus)]
         if not cands:
             if verbose:
@@ -1218,6 +1221,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             if proche(point, suspects):
                 if not proche(point, ecartes):
                     ecartes.append(point)
+                connus[:] = [p for p in connus if not proche(p, [point])]
             else:
                 suspects.append(point)
             if verbose:
