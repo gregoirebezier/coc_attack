@@ -157,6 +157,14 @@ WALL_GRID_FILL = 0.6     # part de mur exigee autour d'un point
 # seuls les remparts de haut niveau - groupes en gros bloc - etaient vus, et
 # les beiges, moins chers et disperses, restaient ignores.
 WALL_MAJOR_RATIO = 0.12
+# Points d'exploration, tires d'une grille couvrant tout le village et
+# independants de toute signature de couleur. Chercher les remparts a leur
+# teinte suppose de connaitre a l'avance celle de chaque niveau : trois fois de
+# suite, des murs parfaitement ameliorables sont restes invisibles parce que
+# leur couleur n'avait pas ete prevue. Quelques points au hasard par phase
+# suffisent a les decouvrir, et le cache retient ce qui a repondu.
+EXPLORE_STEP = 90        # espacement de la grille d'exploration
+EXPLORE_PAR_PHASE = 6    # points explores a chaque passage
 # Le village ne bouge pas d'une attaque a l'autre : ce que l'on a identifie une
 # fois reste vrai. On retient donc les points ou un rempart a repondu, et ceux
 # ou l'on est tombe sur autre chose (une decoration doree, un batiment clair),
@@ -1065,6 +1073,18 @@ def surveille_stocks(stocks, ameliores, prix_hors_portee, verbose=True):
         _STOCKS.clear()
 
 
+def explore_points(rng, n=None):
+    """Points tires au hasard sur tout le village, sans critere de couleur."""
+    x0, y0, x1, y1 = VILLAGE_AREA
+    grille = [(float(x), float(y))
+              for y in range(y0 + EXPLORE_STEP // 2, y1, EXPLORE_STEP)
+              for x in range(x0 + EXPLORE_STEP // 2, x1, EXPLORE_STEP)
+              if not any(zx0 <= x <= zx1 and zy0 <= y <= zy1
+                         for zx0, zy0, zx1, zy1 in VILLAGE_UI_ZONES)]
+    rng.shuffle(grille)
+    return grille[:n if n is not None else EXPLORE_PAR_PHASE]
+
+
 def load_wall_cache():
     try:
         with open(WALL_CACHE) as f:
@@ -1279,9 +1299,12 @@ def pay_upgrade(phone, templates, resource):
     if resource not in boutons:
         # Le jeu ne propose pas cette amelioration : mur au maximum, rangee
         # deja en chantier, ou reserve trop juste.
+        # Ambigu : le mur peut etre au maximum, ou la detection avoir echoue.
+        # Ne pas confondre avec un prix hors de portee, sous peine de desarmer
+        # l'alarme avec le symptome meme du defaut qu'elle doit signaler.
         print(f"    [{resource}] bouton absent du menu")
         record_unknown(menu, f"sans-bouton-{resource}")
-        return "hors-portee"
+        return "indisponible"
 
     if not cost_affordable(menu, boutons[resource][0]):
         # Le prix s'affiche en rouge : inutile de cliquer. On s'epargne la
@@ -1421,8 +1444,14 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # Les points connus sont eux aussi soumis a la liste des ecartes :
         # sans quoi un point devenu muet y restait en tete et etait reessaye a
         # chaque phase, jusqu'a epuiser tout le budget en echecs.
+        # A la detection par couleur s'ajoutent quelques points d'exploration :
+        # c'est le seul moyen de trouver un rempart dont la teinte n'a pas ete
+        # prevue, et ce qui repond enrichit le cache pour les fois suivantes.
+        explores = [p for p in explore_points(rng)
+                    if not proche(p, ecartes) and not proche(p, connus)]
         cands = [p for p in connus if not proche(p, tried) and not proche(p, ecartes)] + \
-                [p for p in detectes if not proche(p, tried) and not proche(p, connus)]
+                [p for p in detectes if not proche(p, tried) and not proche(p, connus)] + \
+                [p for p in explores if not proche(p, tried)]
         if not cands:
             # Le vivier s'est vide : a force d'ecarter, la liste finit par
             # couvrir tout le village et plus aucun candidat ne passe. On
@@ -1514,6 +1543,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                     print(f"[+] rempart ameliore en {resource}")
                 break
             if issue == "hors-portee":
+                # Le jeu a ecrit le prix en rouge : signal economique explicite.
                 hors_portee = True
                 epuisees.add(resource)
             if issue == "refuse":
