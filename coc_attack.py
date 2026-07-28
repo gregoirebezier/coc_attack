@@ -122,7 +122,8 @@ GEM_BOX = (2000, 335, 2210, 392)
 # et perdait le dernier, 5 668 572 se lisant 566 857. Les icones de ressource
 # ne genent pas, leur jaune et leur magenta n'ayant pas les trois composantes
 # claires qu'exige le masque des chiffres.
-STOCK_LINES = {"or": (1975, 42, 2185, 84), "elixir": (1975, 146, 2185, 188)}
+STOCK_LINES = {"or": (1975, 42, 2170, 84), "elixir": (1975, 146, 2170, 188)}
+STOCK_BORDS = (2170, 2185)   # bords droits essayes pour la case des chiffres
 PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # Les chiffres sont blancs, mais la barre de ressources se detache sur le decor
 # du village. Un crane pale y a suffi : a cent soixante-dix, son gris passait
@@ -1269,25 +1270,33 @@ def read_stocks(img, templates):
         return None
     out = {}
     for nom, (x0, y0, x1, y1) in STOCK_LINES.items():
-        z = img[y0:y1, x0:x1]
-        attendus = compte_colonnes(z)
         lectures = []
-        for seuil in STOCK_SEUILS + (None,):
-            mask = masque_chiffres(z, seuil)
-            big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6,
-                                                      (y1 - y0) * 6),
-                                                     Image.LANCZOS)
-            chiffres = re.sub(r"\D", "",
-                              ocr(big, "--psm 7 -c "
-                                       "tessedit_char_whitelist=0123456789"))
-            # Le nombre de chiffres se compte sans OCR : ceux du jeu ne se
-            # touchent pas, chaque colonne claire isolee en est un. Une lecture
-            # d'une autre longueur est un artefact, comme ce 20 930 725 rendu
-            # en huit chiffres la ou le village en affichait sept - il passait
-            # sous le plafond des reserves et emportait le vote.
-            if (chiffres and int(chiffres) <= STOCK_MAX
-                    and (not attendus or len(chiffres) == attendus)):
-                lectures.append(int(chiffres))
+        # Deux largeurs de case. La plus large recupere le dernier chiffre des
+        # montants a sept chiffres larges, que l'etroite coupait - 5 668 572 se
+        # lisait 566 857. Mais elle fait entrer un bord d'icone que le
+        # contraste local prend parfois pour un chiffre de plus. Aucune ne
+        # convient seule ; on les essaie l'une apres l'autre.
+        for bord in STOCK_BORDS:
+            z = img[y0:y1, x0:bord]
+            attendus = compte_colonnes(z)
+            for seuil in STOCK_SEUILS + (None,):
+                mask = masque_chiffres(z, seuil)
+                big = Image.fromarray(255 - mask).resize(((bord - x0) * 6,
+                                                          (y1 - y0) * 6),
+                                                         Image.LANCZOS)
+                chiffres = re.sub(r"\D", "",
+                                  ocr(big, "--psm 7 -c "
+                                           "tessedit_char_whitelist=0123456789"))
+                # Le nombre de chiffres se compte sans OCR : ceux du jeu ne se
+                # touchent pas, chaque colonne claire isolee en est un. Une
+                # lecture d'une autre longueur est un artefact, comme ce
+                # 20 930 725 rendu en huit chiffres la ou le village en
+                # affichait sept - il passait sous le plafond des reserves.
+                if (chiffres and int(chiffres) <= STOCK_MAX
+                        and (not attendus or len(chiffres) == attendus)):
+                    lectures.append(int(chiffres))
+            if lectures:
+                break
         if not lectures:
             return None
         # La premiere lecture valide, donc celle du seuil le plus bas. Aucune
