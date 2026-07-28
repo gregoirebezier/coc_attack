@@ -124,7 +124,7 @@ PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # du village. Un crane pale y a suffi : a cent soixante-dix, son gris passait
 # pour du texte, cinquante-neuf pour cent de la case s'allumait et les chiffres
 # s'y noyaient - l'or devenait illisible, l'elixir perdait son premier chiffre.
-STOCK_BLANC = 200        # clarte minimale d'un pixel de chiffre
+STOCK_SEUILS = (200, 215, 230, 245)   # clartes essayees pour les chiffres
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
@@ -1225,16 +1225,32 @@ def read_stocks(img, templates):
         return None
     out = {}
     for nom, (x0, y0, x1, y1) in STOCK_LINES.items():
-        c = img[y0:y1, x0:x1]
-        mask = (c.min(axis=2) > STOCK_BLANC).astype(np.uint8) * 255
-        big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6, (y1 - y0) * 6),
-                                                 Image.LANCZOS)
-        chiffres = re.sub(r"\D", "",
-                          ocr(big, "--psm 7 -c tessedit_char_whitelist=0123456789"))
-        valeur = int(chiffres) if chiffres else None
-        if valeur is None or valeur > STOCK_MAX:
+        z = img[y0:y1, x0:x1]
+        lectures = []
+        for seuil in STOCK_SEUILS:
+            mask = (z.min(axis=2) > seuil).astype(np.uint8) * 255
+            big = Image.fromarray(255 - mask).resize(((x1 - x0) * 6,
+                                                      (y1 - y0) * 6),
+                                                     Image.LANCZOS)
+            chiffres = re.sub(r"\D", "",
+                              ocr(big, "--psm 7 -c "
+                                       "tessedit_char_whitelist=0123456789"))
+            if chiffres and int(chiffres) <= STOCK_MAX:
+                lectures.append(int(chiffres))
+        if not lectures:
             return None
-        out[nom] = valeur
+        # La valeur qui revient le plus souvent. Aucun seuil ne convient a
+        # toutes les situations : celui qui lit l'or sur un fond de falaise
+        # noie l'elixir dans le liseré clair de sa barre, et l'inverse. Le
+        # chiffre exact importe peu ici - ces montants ne servent qu'a
+        # l'alarme et au journal, jamais a decider d'un paiement - mais
+        # obtenir un nombre importe beaucoup, car une lecture manquee est une
+        # phase que la surveillance ne compte pas.
+        # A egalite de voix, la lecture du seuil le plus bas l'emporte : c'est
+        # celle qui est juste sur un fond normal, les seuils hauts n'existant
+        # que pour les cas ou un decor clair vient s'ajouter aux chiffres.
+        out[nom] = max(lectures,
+                       key=lambda v: (lectures.count(v), -lectures.index(v)))
     return out
 
 
