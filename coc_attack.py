@@ -187,6 +187,7 @@ MOTIF_DEJA_VU = 0.90     # au-dela, un mur n'apprend rien de nouveau
 MOTIF_VOISINAGE = 130    # distance ou l'on cherche les remparts voisins
 MOTIF_VOISINS_MIN = 2    # voisins exiges : un mur seul n'est pas un mur
 MOTIF_COUVERT = 70       # rayon ou un motif rend un point de couleur inutile
+MUR_DECALAGE = 18        # descente du second essai, vers le pied du rempart
 SOURCE_POINT = {}        # d'ou vient chaque candidat, pour le diagnostic
 # Points d'exploration, tires d'une grille couvrant tout le village et
 # independants de toute signature de couleur. Chercher les remparts a leur
@@ -1857,7 +1858,14 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             juste apres un refus en or.
             """
             for essai in range(essais):
-                phone.tap(*point)
+                # Le second essai vise un peu plus bas. En vue isometrique, la
+                # case sensible d'un rempart est a son pied, quand la detection
+                # le repere a sa coiffe doree : retaper au meme pixel ne faisait
+                # que repeter l'echec. Verification faite sur la vue recentree
+                # d'une phase reelle, les trente-trois candidats tombaient tous
+                # sur un mur - ce n'est donc pas la detection qui rate, c'est le
+                # tap qui n'accroche pas.
+                phone.tap(point[0], point[1] + essai * MUR_DECALAGE)
                 time.sleep(1.2)
                 if is_wall_selected():
                     return True
