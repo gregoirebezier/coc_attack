@@ -637,8 +637,16 @@ def compte_chiffres(img, y0, y1):
     return max(set(comptes), key=comptes.count) if comptes else 0
 
 
-def read_loot(img):
+def read_loot(img, minimum=0):
     """Lectures du butin, plusieurs par ressource.
+
+    Quand un seuil est donne, l'OCR n'est lance que pour les ressources dont
+    le nombre de chiffres ne suffit pas a decider : six chiffres, c'est moins
+    d'un million, donc sous un seuil d'un million et demi quoi qu'en dise
+    l'OCR. Ce comptage coute une milliseconde la ou l'OCR en coute quinze
+    cents, et il tranchait deja plus d'une decision sur deux - quarante sur
+    soixante et onze dans le journal - mais on payait l'OCR avant meme de lui
+    poser la question.
 
     Renvoie par exemple {"or": [1412423, 1412423, 1409423], "elixir": [...]}.
     On ne cherche pas a trancher ici : une lecture unique se trompait parfois
@@ -657,6 +665,10 @@ def read_loot(img):
     for name, (y0, y1) in LOOT_LINES.items():
         attendu = compte_chiffres(img, y0, y1)
         lectures = []
+        if minimum > 0 and attendu and (10 ** attendu - 1 < minimum
+                                        or 10 ** (attendu - 1) >= minimum):
+            out[name] = {"lectures": [], "chiffres": attendu}
+            continue
         for seuil, echelle in ((160, 6), (175, 6), (160, 8)):
             crop = img[y0:y1, x0:x1]
             mask = (crop.min(axis=2) > seuil).astype(np.uint8) * 255
@@ -2426,14 +2438,14 @@ def pick_village(phone, templates, args):
     """
     for attempt in range(args.max_skips + 1):
         img = phone.screenshot()
-        loot = read_loot(img)
+        loot = read_loot(img, args.min_loot)
         good, detail = loot_is_good(loot, args.min_loot)
         if good and "douteuse" in detail:
             # L'affichage du butin se met en place avec un temps de retard :
             # une seconde lecture leve souvent le doute, et evite d'attaquer
             # un village pauvre par prudence.
             time.sleep(1.2)
-            loot = read_loot(phone.screenshot())
+            loot = read_loot(phone.screenshot(), args.min_loot)
             good, detail = loot_is_good(loot, args.min_loot)
         if good or args.min_loot <= 0:
             print(f"[i] village retenu ({detail})")
