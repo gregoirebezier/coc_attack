@@ -1088,14 +1088,9 @@ def deploy_all(phone, templates, args, rng, verbose=True):
 
     points, img = calibrate_points(phone, img, first, args, verbose)
     if not points:
-        # Repli : le bord de la map est presque toujours largable. Il passe
-        # par le meme filtre que le sondage, sans quoi il vise des boutons -
-        # le point le plus bas du cote gauche tombe sur "Terminer la bataille".
-        points = [p[-1] for p in probe_lanes(args.side, args.points,
-                                             args.probe_steps)
-                  if is_safe(*p[-1])]
-        print(f"[!] sondage infructueux, repli sur le bord de la map "
-              f"({len(points)} points)")
+        # Repli : le bord de la map est presque toujours largable.
+        points = [p[-1] for p in probe_lanes(args.side, args.points, args.probe_steps)]
+        print("[!] sondage infructueux, repli sur le bord de la map")
 
     kinds = dict(zip(slots, classify_slots(img, slots)))
     if verbose:
