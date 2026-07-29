@@ -1091,15 +1091,9 @@ def deploy_all(phone, templates, args, rng, verbose=True):
         # Repli : le bord de la map est presque toujours largable. Il passe
         # par le meme filtre que le sondage, sans quoi il vise des boutons -
         # le point le plus bas du cote gauche tombe sur "Terminer la bataille".
-        # Le point le plus exterieur de chaque couloir qui soit hors des
-        # boutons - et non le dernier, ecarte des qu'il tombe sur l'un d'eux.
-        # Filtrer ainsi le couloir entier n'avait laisse qu'un seul point de
-        # largage sur seize, donc toutes les troupes au meme endroit.
-        points = []
-        for couloir in probe_lanes(args.side, args.points, args.probe_steps):
-            surs = [p for p in couloir if is_safe(*p)]
-            if surs:
-                points.append(surs[-1])
+        points = [p[-1] for p in probe_lanes(args.side, args.points,
+                                             args.probe_steps)
+                  if is_safe(*p[-1])]
         print(f"[!] sondage infructueux, repli sur le bord de la map "
               f"({len(points)} points)")
 
