@@ -142,7 +142,7 @@ STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
 # 4,2 millions, un jaune ou un dore noir 6 - la phase renonce donc parfois a un
 # beige payable, en echange d'une minute rendue au farm a chaque fois.
 MUR_PRIX_MIN = 6_000_000
-MUR_MARGE = 0.95         # marge de securite sur la lecture des reserves
+MUR_MARGE = 1.00         # seuil applique tel quel, sans marge
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
