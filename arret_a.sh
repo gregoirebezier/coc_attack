@@ -8,11 +8,15 @@
 cd "$(dirname "$0")" || exit 1
 
 CIBLE=${1:?usage: arret_a.sh <nombre total d ameliorations>}
-VIDES=0
 
 compte() { grep -c 'rempart ameliore' run.log; }
+compte_vides() { grep -c 'plus de rempart a ameliorer' run.log; }
 
-echo "arret prevu a $CIBLE ameliorations (actuellement $(compte))"
+# Releve de depart, pris avant la boucle : comparer a zero faisait prendre les
+# occurrences deja au journal pour des nouvelles, et l'arret tombait aussitot.
+VIDES=$(compte_vides)
+echo "arret prevu a $CIBLE ameliorations (actuellement $(compte),"
+echo "  $VIDES annonces de vivier vide deja au journal)"
 
 while true; do
     n=$(compte)
@@ -23,12 +27,10 @@ while true; do
     # Le programme le dit lui-meme quand il ne trouve plus rien a monter.
     # Trois phases de suite sans candidat valent un arret : inutile d'attaquer
     # pour un vivier vide.
-    vides=$(grep -c 'plus de rempart a ameliorer' run.log)
-    if [ "$vides" -ge $((VIDES + 3)) ]; then
+    if [ "$(compte_vides)" -ge $((VIDES + 3)) ]; then
         echo "PLUS DE REMPART A MONTER : arret a $n ameliorations"
         break
     fi
-    [ "$VIDES" = 0 ] && VIDES=$vides
     sleep 30
 done
 
