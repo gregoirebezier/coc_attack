@@ -74,6 +74,7 @@ SLOT_ACTIVE_SAT = 0.15      # au-dessus = carte encore utilisable
 # sorts 32-39 %, heros 0.3-5.4 %, siege 1.6 %.
 BADGE_BOX = (10, 48, 902, 934)   # dx0, dx1, y0, y1 autour du centre de carte
 BADGE_MIN = 15.0
+TITRE_SEUILS = (150, 180, 210, 240)   # clartes essayees pour lire un titre
 # Difference min. prouvant qu'une unite est sortie. Mesures sur captures
 # reelles : bruit d'animation 0.0-2.1, une seule unite sortie (x50 -> x49)
 # ~11, carte videe 60-88. On se cale juste au-dessus du bruit, sinon le
@@ -1526,16 +1527,31 @@ def menu_open(img):
 
 
 def selected_title(img):
-    """Nom de l'objet selectionne, lu par OCR. Chaine vide si illisible."""
+    """Nom de l'objet selectionne, lu par OCR. Chaine vide si illisible.
+
+    Plusieurs clartes sont essayees, car ce texte est incruste dans le decor du
+    village et un seuil unique le rend parfois illisible : un rempart de niveau
+    dix-sept s'est lu "a | 4 ( i ea U- 17)" et a donc ete rejete, alors qu'il
+    etait bel et bien selectionne. On s'arrete des qu'une lecture donne un
+    rempart, ce qui ne coute rien dans le cas courant.
+    """
     try:
         import pytesseract
     except ImportError:
         return ""
     x0, y0, x1, y1 = TITLE_BOX
-    c = img[y0:y1, x0:x1]
-    mask = (c.min(axis=2) > 150).astype(np.uint8) * 255
-    big = Image.fromarray(255 - mask).resize(((x1 - x0) * 3, (y1 - y0) * 3), Image.LANCZOS)
-    return ocr(big, "--psm 7").strip()
+    z = img[y0:y1, x0:x1]
+    lectures = []
+    for seuil in TITRE_SEUILS:
+        mask = (z.min(axis=2) > seuil).astype(np.uint8) * 255
+        big = Image.fromarray(255 - mask).resize(((x1 - x0) * 3, (y1 - y0) * 3),
+                                                 Image.LANCZOS)
+        lu = ocr(big, "--psm 7").strip()
+        if titre_est_rempart(lu):
+            return lu
+        if lu:
+            lectures.append(lu)
+    return max(lectures, key=len) if lectures else ""
 
 
 def menu_buttons(img):
