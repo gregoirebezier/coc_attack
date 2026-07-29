@@ -1970,9 +1970,13 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # ne reecrira pas le cache avec des points qu'on ne saurait pas situer.
         connus, ecartes, suspects, maximes = [], [], [], []
     else:
+        # Recales sans etre filtres : un point sorti du cadre sous cette vue y
+        # reviendra sous la suivante, la camera alternant entre deux positions.
+        # L'ecarter pour de bon vidait le cache a chaque bascule - trente-deux
+        # murs au maximum tombes a dix-huit en deux phases. Le controle de
+        # sureté se fait au moment de taper.
         dx, dy = decalage
-        vers_ecran = lambda l: [p for p in ((x + dx, y + dy) for x, y in l)
-                                if point_taquable(p)]
+        vers_ecran = lambda l: [(x + dx, y + dy) for x, y in l]
         connus, ecartes = vers_ecran(connus), vers_ecran(ecartes)
         suspects, maximes = vers_ecran(suspects), vers_ecran(maximes)
     # Le budget doit couvrir les essais infructueux, pas seulement les
@@ -2007,7 +2011,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                         if not proche(p, ecartes) and not proche(p, connus)
                         and not proche(p, maximes)]
         cands = [p for p in connus if not proche(p, tried)
-                 and not proche(p, ecartes) and not proche(p, maximes)] + \
+                 and not proche(p, ecartes) and not proche(p, maximes)
+                 and point_taquable(p)] + \
                 [p for p in detectes if not proche(p, tried) and not proche(p, connus)] + \
                 [p for p in explores if not proche(p, tried)]
         if not cands:
