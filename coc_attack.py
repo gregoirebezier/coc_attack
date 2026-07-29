@@ -1404,6 +1404,22 @@ def explore_points(rng, n=None):
     return grille[:n if n is not None else EXPLORE_PAR_PHASE]
 
 
+def point_taquable(p):
+    """Ce point peut-il etre tape sans risque ?
+
+    Le recalage deplace les points memorises de plusieurs centaines de pixels.
+    Rien ne garantit qu'ils restent dans la zone de village : l'un s'est
+    retrouve a y=768, sous la limite de recherche, et un cran de plus l'aurait
+    pose sur la rangee de boutons du bas. Un tap egare sur celle-ci a deja
+    coute sept cent quarante-trois gemmes.
+    """
+    x0, y0, x1, y1 = VILLAGE_AREA
+    if not (x0 <= p[0] <= x1 and y0 <= p[1] <= y1):
+        return False
+    return not any(zx0 <= p[0] <= zx1 and zy0 <= p[1] <= zy1
+                   for zx0, zy0, zx1, zy1 in VILLAGE_UI_ZONES)
+
+
 def mesure_decalage(img):
     """De combien la vue courante est decalee par rapport a la reference.
 
@@ -1955,7 +1971,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         connus, ecartes, suspects, maximes = [], [], [], []
     else:
         dx, dy = decalage
-        vers_ecran = lambda l: [(x + dx, y + dy) for x, y in l]
+        vers_ecran = lambda l: [p for p in ((x + dx, y + dy) for x, y in l)
+                                if point_taquable(p)]
         connus, ecartes = vers_ecran(connus), vers_ecran(ecartes)
         suspects, maximes = vers_ecran(suspects), vers_ecran(maximes)
     # Le budget doit couvrir les essais infructueux, pas seulement les
