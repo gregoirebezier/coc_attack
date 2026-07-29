@@ -141,6 +141,7 @@ STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
 # mur n'est payable et la phase ne peut que perdre son temps - une minute a
 # selectionner des remparts pour se voir repondre en rouge.
 MUR_PRIX_MIN = 4_200_000
+MUR_MARGE = 0.85         # marge de securite sur la lecture des reserves
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
@@ -1315,9 +1316,10 @@ def read_stocks(img, templates):
         # lisait 566 857. Mais elle fait entrer un bord d'icone que le
         # contraste local prend parfois pour un chiffre de plus. Aucune ne
         # convient seule ; on les essaie l'une apres l'autre.
+        attendus = 0
         for bord in STOCK_BORDS:
             z = img[y0:y1, x0:bord]
-            attendus = compte_colonnes(z)
+            attendus = attendus or compte_colonnes(z)
             for seuil in STOCK_SEUILS:
                 mask = masque_chiffres(z, seuil)
                 big = Image.fromarray(255 - mask).resize(((bord - x0) * 6,
@@ -1326,31 +1328,26 @@ def read_stocks(img, templates):
                 chiffres = re.sub(r"\D", "",
                                   ocr(big, "--psm 7 -c "
                                            "tessedit_char_whitelist=0123456789"))
-                # Le nombre de chiffres se compte sans OCR : ceux du jeu ne se
-                # touchent pas, chaque colonne claire isolee en est un. Une
-                # lecture d'une autre longueur est un artefact, comme ce
-                # 20 930 725 rendu en huit chiffres la ou le village en
-                # affichait sept - il passait sous le plafond des reserves.
-                if (chiffres and int(chiffres) <= STOCK_MAX
-                        and (not attendus or len(chiffres) == attendus)):
-                    lectures.append(int(chiffres))
-            if lectures:
-                break
+                # Toutes les lectures plausibles sont retenues ; on
+                # tranchera entre elles apres.
+                if chiffres and int(chiffres) <= STOCK_MAX:
+                    lectures.append((int(chiffres), len(chiffres)))
         if not lectures:
             return None
-        # La premiere lecture valide, donc celle du seuil le plus bas. Aucune
-        # clarte unique ne convient a toutes les situations : celle qui lit
-        # l'or sur un fond de falaise noie l'elixir dans le lisere clair de sa
-        # barre. Mais les seuils hauts n'existent que pour ces fonds-la ; sur
-        # un fond normal ils rongent les traits et lisent un cinq la ou il y a
-        # un neuf. Les faire voter revenait a leur donner raison contre le
-        # seuil juste, deux voix contre une.
-        #
-        # Obtenir un nombre importe plus que sa derniere decimale : ces
-        # montants ne servent qu'a l'alarme et au journal, jamais a decider
-        # d'un paiement, et une lecture manquee est une phase que la
-        # surveillance ne compte pas.
-        out[nom] = lectures[0]
+        # Le nombre de chiffres se compte sans OCR : ceux du jeu ne se touchent
+        # pas, chaque colonne claire isolee en est un. Mais ce comptage se
+        # trompe lui aussi - il a rendu six sur un 4 959 274 dont deux chiffres
+        # se touchaient - et l'avoir traite en filtre absolu faisait alors
+        # rejeter toutes les lectures justes d'un coup. Il ne sert donc plus
+        # qu'a departager : on prefere les lectures de la bonne longueur, et
+        # s'il n'y en a aucune, la valeur qui revient le plus souvent.
+        exactes = [v for v, n in lectures if attendus and n == attendus]
+        if exactes:
+            out[nom] = exactes[0]
+        else:
+            valeurs = [v for v, _ in lectures]
+            out[nom] = max(valeurs,
+                           key=lambda v: (valeurs.count(v), -valeurs.index(v)))
     return out
 
 
@@ -1818,8 +1815,12 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # cher. La phase entiere se resumerait a des prix en rouge, une minute
     # perdue par attaque, soit une attaque de plus toutes les trois. On ne
     # saute que sur une lecture reussie : une lecture manquee ne prouve rien.
+    # La marge protege d'une erreur de lecture : l'OCR se trompe parfois d'un
+    # chiffre, et un 4 500 000 lu 1 500 000 ferait sauter une phase ou un mur
+    # etait payable. Ne pas sauter coute une minute, sauter a tort coute une
+    # amelioration.
     stocks_avant = read_stocks(phone.screenshot(), templates)
-    if stocks_avant and max(stocks_avant.values()) < MUR_PRIX_MIN:
+    if stocks_avant and max(stocks_avant.values()) < MUR_PRIX_MIN * MUR_MARGE:
         if verbose:
             print(f"[i] remparts sautes : or={stocks_avant['or']} "
                   f"elixir={stocks_avant['elixir']}, moins que {MUR_PRIX_MIN}")
