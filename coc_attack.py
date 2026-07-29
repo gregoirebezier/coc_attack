@@ -2621,16 +2621,22 @@ def one_round(phone, templates, args, rng):
     CAPTURES = 0
     debut_tour = time.time()
     print("=== Recherche d'un adversaire ===")
+    t0 = time.time()
     if not goto_battle(phone, templates):
         print("[!] impossible d'atteindre le combat")
         return False
 
+    t_nav = time.time() - t0
+    t0 = time.time()
     convient, butin_depart = pick_village(phone, templates, args)
+    t_choix = time.time() - t0
     if not convient:
         return False
 
     print(f"=== Deploiement (cote {args.side}) ===")
+    t0 = time.time()
     emptied, total = deploy_all(phone, templates, args, rng)
+    t_depot = time.time() - t0
     print(f"[+] {emptied}/{total} slots vides")
 
     if args.probe:
@@ -2641,9 +2647,11 @@ def one_round(phone, templates, args, rng):
         phone.tap(*SCREENS["battle"]["tap"])
         time.sleep(2.5)
 
+    t0 = time.time()
     if not end_battle(phone, templates, args, butin_depart):
         print("[!] retour au village incertain")
         return False
+    t_combat = time.time() - t0
     print("[+] rentre au village")
 
     if args.walls > 0:
@@ -2652,7 +2660,9 @@ def one_round(phone, templates, args, rng):
         print(f"[+] {n} rempart(s) ameliore(s)")
     duree = time.time() - debut_tour
     print(f"[i] tour en {duree:.0f}s, {CAPTURES} captures "
-          f"({CAPTURES * 0.88:.0f}s a l'ecran)")
+          f"({CAPTURES * 0.88:.0f}s a l'ecran) | navigation {t_nav:.0f}s, "
+          f"choix {t_choix:.0f}s, depot {t_depot:.0f}s, combat {t_combat:.0f}s, "
+          f"remparts {time.time() - t0 - t_combat:.0f}s")
     return True
 
 
