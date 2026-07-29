@@ -1322,6 +1322,7 @@ def read_stocks(img, templates):
         # contraste local prend parfois pour un chiffre de plus. Aucune ne
         # convient seule ; on les essaie l'une apres l'autre.
         attendus = 0
+        exacte = None
         for bord in STOCK_BORDS:
             z = img[y0:y1, x0:bord]
             attendus = attendus or compte_colonnes(z)
@@ -1333,12 +1334,25 @@ def read_stocks(img, templates):
                 chiffres = re.sub(r"\D", "",
                                   ocr(big, "--psm 7 -c "
                                            "tessedit_char_whitelist=0123456789"))
-                # Toutes les lectures plausibles sont retenues ; on
-                # tranchera entre elles apres.
                 if chiffres and int(chiffres) <= STOCK_MAX:
                     lectures.append((int(chiffres), len(chiffres)))
+                    # Une lecture de la bonne longueur suffit : on arrete la.
+                    # Les essayer toutes coutait vingt-quatre passes d'OCR par
+                    # ecran, cinq secondes a chaque attaque, alors que la
+                    # premiere clarte repond juste dans le cas courant. Les
+                    # suivantes n'existent que pour les fonds difficiles - un
+                    # decor pale derriere la barre, un remplissage a mi-course
+                    # - et ne servent que si aucune n'a encore abouti.
+                    if attendus and len(chiffres) == attendus:
+                        exacte = int(chiffres)
+                        break
+            if exacte is not None:
+                break
         if not lectures:
             return None
+        if exacte is not None:
+            out[nom] = exacte
+            continue
         # Le nombre de chiffres se compte sans OCR : ceux du jeu ne se touchent
         # pas, chaque colonne claire isolee en est un. Mais ce comptage se
         # trompe lui aussi - il a rendu six sur un 4 959 274 dont deux chiffres
