@@ -2538,6 +2538,37 @@ def pick_village(phone, templates, args):
     return True, read_loot(phone.screenshot())   # lecture complete, cf. plus haut
 
 
+def confirme_fin_combat(phone, templates):
+    """Repond a la demande de confirmation de fin de bataille, s'il y en a une.
+
+    Le jeu la demande parfois, parfois non - une fin provoquee a la main est
+    passee directement au village. C'est la seule fenetre Annuler / OK a
+    laquelle on repond OK : partout ailleurs ce bouton achete des gemmes ou
+    ferme Clash of Clans, et la regle du programme est de toujours refuser. On
+    ne fait donc exception que dans les secondes qui suivent notre propre
+    demande, et jamais si le texte parle de quitter le jeu.
+
+    Sans cela la reddition ne servait a rien : le tap sur "Terminer la
+    bataille" partait bien, puis sa confirmation etait annulee.
+    """
+    for _ in range(3):
+        img = phone.screenshot()
+        if not cancel_dialog_open(img):
+            time.sleep(1.0)
+            continue
+        texte = texte_dialogue(img).lower()
+        record_unknown(img, "confirmation-fin-combat")
+        if "quitter" in texte:
+            print("[!] confirmation de sortie du jeu, refusee")
+            phone.tap(*CANCEL_BUTTON)
+            return False
+        phone.tap(*CANCEL_OK)
+        print("[i] fin de bataille confirmee")
+        time.sleep(1.5)
+        return True
+    return False
+
+
 def attend_fin_combat(phone, templates, args, butin_depart):
     """Attend la fin du combat, en l'abregeant quand le village est vide.
 
@@ -2578,7 +2609,8 @@ def attend_fin_combat(phone, templates, args, butin_depart):
                 if bas >= BUTIN_CONFIRMATIONS:
                     print("[i] village vide, on termine le combat")
                     phone.tap(*SCREENS["battle"]["tap"])
-                    time.sleep(2.5)
+                    time.sleep(1.5)
+                    confirme_fin_combat(phone, templates)
                     demande = True
         # Une capture coute pres de neuf cents millisecondes, et elles pesent
         # vingt-neuf pour cent du cycle. Les premieres secondes d'un combat ne
