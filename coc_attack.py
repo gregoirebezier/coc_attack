@@ -269,6 +269,7 @@ REPERES = [(520, 200, 780, 360), (900, 180, 1160, 340), (1400, 200, 1660, 360),
 REPERE_MIN = 0.55        # correlation en deca de laquelle un repere ne compte pas
 REPERE_ACCORD = 12       # ecart en pixels sous lequel deux reperes s'accordent
 REPERE_VOIX = 3          # reperes d'accord exiges pour retenir un decalage
+REPERE_SUR = 0.80        # score au-dela duquel un seul repere fait foi
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
@@ -1431,7 +1432,17 @@ def mesure_decalage(img):
         _, score, _, (px, py) = cv2.minMaxLoc(
             cv2.matchTemplate(scene, repere, cv2.TM_CCOEFF_NORMED))
         if score >= REPERE_MIN:
-            propositions.append((float(px - x0), float(py - y0)))
+            propositions.append((float(score), float(px - x0), float(py - y0)))
+    # Un repere tres sur se passe d'appui. Les autres sont souvent faibles pour
+    # de bonnes raisons - leur contenu a change, ou le decalage les a pousses
+    # hors du cadre - et exiger trois voix ecartait la bonne reponse : sur une
+    # mesure reelle, un repere a 0,92 donnait le decalage exact que la
+    # correlation de phase confirmait, les quatre autres plafonnant a 0,54.
+    if propositions:
+        meilleur = max(propositions)
+        if meilleur[0] >= REPERE_SUR:
+            return (meilleur[1], meilleur[2])
+    propositions = [(x, y) for _, x, y in propositions]
     # On ne retient qu'un decalage sur lequel plusieurs reperes tombent
     # d'accord. Un motif repetitif fait dire n'importe quoi a un repere isole,
     # mais il faudrait une coincidence pour qu'il fasse mentir trois reperes
