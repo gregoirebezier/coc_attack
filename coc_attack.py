@@ -2461,7 +2461,8 @@ def pick_village(phone, templates, args):
             # une seconde lecture leve souvent le doute, et evite d'attaquer
             # un village pauvre par prudence.
             time.sleep(1.2)
-            loot = read_loot(phone.screenshot(), args.min_loot)
+            img = phone.screenshot()
+            loot = read_loot(img, args.min_loot)
             good, detail = loot_is_good(loot, args.min_loot)
         if good or args.min_loot <= 0:
             print(f"[i] village retenu ({detail})")
@@ -2472,7 +2473,14 @@ def pick_village(phone, templates, args):
             # cesse de le faire des l'heure ou j'ai introduit cette paresse.
             # Le cout d'une lecture complete se paie une fois par attaque, pas
             # une fois par village examine.
-            return True, (loot if butin_total(loot) else read_loot(img))
+            # Le repli doit lire l'image la plus recente : celle d'avant la
+            # relecture montrait un butin pas encore affiche, et rendait un
+            # butin de reference vide - donc pas de reddition possible.
+            reference = loot if butin_total(loot) else read_loot(img)
+            if butin_total(reference) is None:
+                time.sleep(1.0)
+                reference = read_loot(phone.screenshot())
+            return True, reference
         print(f"[i] village passe ({detail} < {args.min_loot})")
         phone.tap(*NEXT_BUTTON)
         time.sleep(4.0)
@@ -2495,6 +2503,8 @@ def attend_fin_combat(phone, templates, args, butin_depart):
     main sur un village encore plein parce qu'une ressource n'a pas ete lue.
     """
     depart = butin_total(butin_depart or {})
+    if depart is None:
+        print("[i] butin de depart illisible : le combat ira a son terme")
     debut = time.time()
     fin = debut + args.max_battle
     prochaine_lecture = time.time() + BUTIN_INTERVALLE
