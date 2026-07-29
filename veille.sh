@@ -10,8 +10,16 @@ types_vus=$(ls unknown 2>/dev/null | sed 's/^[0-9-]*-//; s/\.png$//' | sort -u)
 
 while true; do
     # Ce qui ne peut pas attendre le prochain bilan.
+    # Le programme s'arrete de lui-meme au bout de sa serie, et le superviseur
+    # observe une pause avant de relancer : une absence ponctuelle est normale.
+    # On ne crie qu'apres l'avoir constatee plusieurs fois de suite.
     for p in run_forever coc_attack.py; do
-        pgrep -f "$p" >/dev/null || echo "URGENT $p est mort"
+        absent=1
+        for _ in 1 2 3 4 5; do
+            if pgrep -f "$p" >/dev/null; then absent=0; break; fi
+            sleep 25
+        done
+        [ "$absent" = 1 ] && echo "URGENT $p absent depuis plus de deux minutes"
     done
 
     n=$(grep -c '^\[!\]' run.log)
