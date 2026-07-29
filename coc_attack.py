@@ -2465,7 +2465,14 @@ def pick_village(phone, templates, args):
             good, detail = loot_is_good(loot, args.min_loot)
         if good or args.min_loot <= 0:
             print(f"[i] village retenu ({detail})")
-            return True, loot
+            # Le village retenu, lui, se lit en entier : c'est la reference a
+            # laquelle on comparera le butin restant pendant le combat. La
+            # lecture paresseuse ne rend rien quand le comptage a suffi, et
+            # sans reference la reddition ne peut plus se declencher - elle a
+            # cesse de le faire des l'heure ou j'ai introduit cette paresse.
+            # Le cout d'une lecture complete se paie une fois par attaque, pas
+            # une fois par village examine.
+            return True, (loot if butin_total(loot) else read_loot(img))
         print(f"[i] village passe ({detail} < {args.min_loot})")
         phone.tap(*NEXT_BUTTON)
         time.sleep(4.0)
@@ -2473,7 +2480,7 @@ def pick_village(phone, templates, args):
             print("[!] plus dans un village apres 'Suivant'")
             return False, {}
     print(f"[i] {args.max_skips} villages passes, on attaque celui-ci")
-    return True, read_loot(phone.screenshot())
+    return True, read_loot(phone.screenshot())   # lecture complete, cf. plus haut
 
 
 def attend_fin_combat(phone, templates, args, butin_depart):
