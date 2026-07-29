@@ -676,12 +676,21 @@ def read_loot(img, minimum=0):
         return {}
 
     x0, x1 = LOOT_X
+    comptes = {n: compte_chiffres(img, y0, y1)
+               for n, (y0, y1) in LOOT_LINES.items()}
+    # Le seuil porte sur le total : c'est donc l'encadrement des deux
+    # ressources reunies qui dit si l'OCR a quelque chose a apporter. Le
+    # decider ressource par ressource, comme avant, faisait lire a l'OCR des
+    # villages que la somme des comptages tranchait deja.
+    au_moins = sum(10 ** (c - 1) for c in comptes.values() if c)
+    au_plus = sum(10 ** c - 1 for c in comptes.values() if c)
+    tranche = (minimum > 0 and all(comptes.values())
+               and (au_moins >= minimum or au_plus < minimum))
     out = {}
     for name, (y0, y1) in LOOT_LINES.items():
-        attendu = compte_chiffres(img, y0, y1)
+        attendu = comptes[name]
         lectures = []
-        if minimum > 0 and attendu and (10 ** attendu - 1 < minimum
-                                        or 10 ** (attendu - 1) >= minimum):
+        if tranche:
             out[name] = {"lectures": [], "chiffres": attendu}
             continue
         for seuil, echelle in ((160, 6), (175, 6), (160, 8)):
@@ -734,53 +743,58 @@ def part_restante(depart, reste):
     return sum(b[n] for n in communes) / total
 
 
+def bornes_butin(info):
+    """Encadrement d'une ressource : (au moins, au plus), None si inconnu.
+
+    Le nombre de chiffres suffit souvent : six chiffres, c'est entre cent mille
+    et un million moins un, sans que l'OCR ait a se prononcer.
+    """
+    lectures = (info or {}).get("lectures") or []
+    chiffres = (info or {}).get("chiffres") or 0
+    if lectures:
+        return min(lectures), max(lectures)
+    if chiffres:
+        return 10 ** (chiffres - 1), 10 ** chiffres - 1
+    return None
+
+
 def loot_is_good(loot, minimum):
     """Ce village vaut-il l'attaque ?
 
+    Le seuil porte sur le total or + elixir, non sur chaque ressource prise a
+    part. Un village a 1 181 739 d'or et 1 356 789 d'elixir etait ecarte devant
+    un seuil d'un million et demi, alors qu'il offrait deux millions et demi :
+    aucune de ses deux reserves n'atteignait le seuil a elle seule.
+
     Il ne s'agit pas de connaitre le butin au chiffre pres, mais de savoir de
-    quel cote du seuil il tombe. Deux sources y suffisent souvent sans que
-    l'OCR ait besoin d'etre exact.
-
-    Le nombre de chiffres visibles encadre d'abord la valeur : six chiffres,
-    c'est moins d'un million, donc sous un seuil d'un million et demi, quoi
-    qu'en dise l'OCR. Ce seul comptage tranche la plupart des cas.
-
-    Restent les valeurs dont la longueur enjambe le seuil : les lectures y
-    servent alors, et suffisent tant qu'elles tombent toutes du meme cote.
-    Quand elles l'encadrent, ou qu'aucune n'a abouti, on attaque : passer un
-    village correct coute plus cher qu'en attaquer un pauvre.
+    quel cote du seuil il tombe. Le nombre de chiffres visibles encadre chaque
+    valeur, et cet encadrement tranche
+    le plus souvent sans OCR. Quand il
+    enjambe le seuil, on attaque : passer un village correct coute plus cher
+    qu'en attaquer un pauvre.
     """
-    detail, riche, pauvre = [], False, True
+    detail, bas, haut, inconnu = [], 0, 0, False
     for nom in ("or", "elixir"):
         info = loot.get(nom) or {}
-        lectures = info.get("lectures") or []
-        chiffres = info.get("chiffres") or 0
-
-        if chiffres:
-            if 10 ** chiffres - 1 < minimum:        # trop court pour atteindre
-                detail.append(f"{nom}<{10 ** chiffres}")
-                continue
-            if 10 ** (chiffres - 1) >= minimum:     # trop long pour rester sous
-                detail.append(f"{nom}>{10 ** (chiffres - 1)}")
-                riche = True
-                continue
-
-        if not lectures:
+        bornes = bornes_butin(info)
+        if bornes is None:
             detail.append(f"{nom}=?")
-            pauvre = False
+            inconnu = True
             continue
-        bas, haut = min(lectures), max(lectures)
-        detail.append(f"{nom}={bas}" if bas == haut else f"{nom}={bas}~{haut}")
-        if bas >= minimum:
-            riche = True
-        elif haut >= minimum:
-            pauvre = False      # le seuil tombe entre deux lectures
-    texte = " ".join(detail)
-    if riche:
+        b, h = bornes
+        lectures = info.get("lectures") or []
+        if lectures:
+            detail.append(f"{nom}={b}" if b == h else f"{nom}={b}~{h}")
+        else:
+            detail.append(f"{nom}<{h + 1}")
+        bas += b
+        haut += h
+    texte = " ".join(detail) + f" (total {bas}~{haut})"
+    if bas >= minimum:
         return True, texte
-    if pauvre:
+    if not inconnu and haut < minimum:
         return False, texte
-    return True, texte + " (lecture douteuse, on attaque)"
+    return True, texte + " (encadrement incertain, on attaque)"
 
 
 # --------------------------------------------------------------------------
