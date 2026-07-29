@@ -142,6 +142,12 @@ STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
 # accumuler puis depenser d'un coup, plutot que de payer une minute de phase a
 # chaque attaque pour un mur ou deux. Vingt millions valent trois remparts a
 # six, et les reserves plafonnent a vingt-neuf.
+# Un combat continue de courir apres que le village est vide : sur une mesure,
+# il restait deux minutes sept de chronometre pour un butin deja tombe a
+# 631 948 d'or. Ces minutes sont du farm perdu, alors on rend la main des que
+# le village ne rapporte plus rien.
+BUTIN_RATIO_FIN = 0.10   # part du butin initial en deca de laquelle on arrete
+BUTIN_INTERVALLE = 12.0  # secondes entre deux lectures du butin restant
 MUR_PRIX_MIN = 20_000_000
 MUR_MARGE = 1.00         # seuil applique tel quel, sans marge
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
@@ -625,6 +631,22 @@ def read_loot(img):
                 lectures.append(valeur)
         out[name] = {"lectures": lectures, "chiffres": attendu}
     return out
+
+
+def butin_total(loot):
+    """Somme or + elixir d'une lecture de butin, ou None si incomplete.
+
+    Une lecture partielle ne doit jamais terminer un combat : mieux vaut
+    laisser le chronometre courir que rendre la main sur un village encore
+    plein parce qu'une ressource n'a pas ete lue.
+    """
+    total = 0
+    for nom in ("or", "elixir"):
+        lectures = (loot.get(nom) or {}).get("lectures") or []
+        if not lectures:
+            return None
+        total += sorted(lectures)[len(lectures) // 2]
+    return total
 
 
 def loot_is_good(loot, minimum):
@@ -2353,7 +2375,11 @@ def goto_battle(phone, templates, timeout=150):
 
 
 def pick_village(phone, templates, args):
-    """Passe les villages trop pauvres. Renvoie True si un village convient."""
+    """Passe les villages trop pauvres.
+
+    Renvoie (convient, butin) : le butin du village retenu sert de reference
+    pour savoir, pendant le combat, ce qu'il en reste.
+    """
     for attempt in range(args.max_skips + 1):
         img = phone.screenshot()
         loot = read_loot(img)
@@ -2367,25 +2393,66 @@ def pick_village(phone, templates, args):
             good, detail = loot_is_good(loot, args.min_loot)
         if good or args.min_loot <= 0:
             print(f"[i] village retenu ({detail})")
-            return True
+            return True, loot
         print(f"[i] village passe ({detail} < {args.min_loot})")
         phone.tap(*NEXT_BUTTON)
         time.sleep(4.0)
         if not wait_for(phone, templates, {"battle"}, 30):
             print("[!] plus dans un village apres 'Suivant'")
-            return False
+            return False, {}
     print(f"[i] {args.max_skips} villages passes, on attaque celui-ci")
-    return True
+    return True, read_loot(phone.screenshot())
 
 
-def end_battle(phone, templates, args):
+def attend_fin_combat(phone, templates, args, butin_depart):
+    """Attend la fin du combat, en l'abregeant quand le village est vide.
+
+    Renvoie l'ecran atteint, ou None si le chronometre du programme expire.
+
+    Le butin affiche pendant l'attaque est celui qui reste a prendre, pas celui
+    deja pris : il decroit a mesure qu'on pille, et sa chute sous un dixieme du
+    depart dit que le village ne rapportera plus rien. Une lecture incomplete
+    ne conclut jamais - mieux vaut laisser le chronometre courir que rendre la
+    main sur un village encore plein parce qu'une ressource n'a pas ete lue.
+    """
+    depart = butin_total(butin_depart or {})
+    fin = time.time() + args.max_battle
+    prochaine_lecture = time.time() + BUTIN_INTERVALLE
+    demande = False
+    while time.time() < fin:
+        img = phone.screenshot()
+        ecran = identify(img, templates)[0]
+        if ecran in ("result", "home"):
+            return ecran
+        if (not demande and depart and ecran == "battle"
+                and time.time() >= prochaine_lecture):
+            prochaine_lecture = time.time() + BUTIN_INTERVALLE
+            reste = butin_total(read_loot(img))
+            if reste is not None:
+                part = reste / depart
+                print(f"[i] butin restant {part:.0%}")
+                if part <= BUTIN_RATIO_FIN:
+                    print("[i] village vide, on termine le combat")
+                    phone.tap(*SCREENS["battle"]["tap"])
+                    time.sleep(2.5)
+                    demande = True
+        # Meme cadence que la surveillance d'ecran qu'elle remplace : une
+        # capture coute pres d'une seconde, inutile d'en tripler le nombre.
+        time.sleep(3.0)
+    return None
+
+
+def end_battle(phone, templates, args, butin_depart=None):
     """Laisse le combat se conclure, puis rentre au village.
 
-    On ne touche pas a "Terminer la bataille" tant que le combat tourne : les
-    troupes ont besoin de temps pour casser les remparts.
+    On ne touche pas a "Terminer la bataille" tant que le village rapporte
+    encore : les troupes ont besoin de temps pour casser les remparts. Mais un
+    combat continue de courir apres que le village est vide - deux minutes sept
+    de chronometre restant pour un butin deja tombe a 631 948 d'or, sur la
+    mesure qui a motive ce changement - et ces minutes sont du farm perdu.
     """
     print(f"=== Combat en cours (max {args.max_battle}s) ===")
-    screen = wait_for(phone, templates, {"result", "home"}, args.max_battle, poll=3.0)
+    screen = attend_fin_combat(phone, templates, args, butin_depart)
     if screen is None:
         print("[i] combat toujours en cours, on le termine")
         phone.tap(*SCREENS["battle"]["tap"])
@@ -2436,7 +2503,8 @@ def one_round(phone, templates, args, rng):
         print("[!] impossible d'atteindre le combat")
         return False
 
-    if not pick_village(phone, templates, args):
+    convient, butin_depart = pick_village(phone, templates, args)
+    if not convient:
         return False
 
     print(f"=== Deploiement (cote {args.side}) ===")
@@ -2451,7 +2519,7 @@ def one_round(phone, templates, args, rng):
         phone.tap(*SCREENS["battle"]["tap"])
         time.sleep(2.5)
 
-    if not end_battle(phone, templates, args):
+    if not end_battle(phone, templates, args, butin_depart):
         print("[!] retour au village incertain")
         return False
     print("[+] rentre au village")
