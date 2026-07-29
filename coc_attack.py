@@ -196,7 +196,7 @@ WALL_MAJOR_RATIO = 0.12
 MOTIF_DIR = os.path.join(HERE, "motifs")
 MOTIF_DEMI = (26, 22)    # demi-largeur et demi-hauteur d'une imagette
 MOTIF_SEUIL = 0.78       # correlation minimale pour retenir une correspondance
-MOTIF_MAX = 18           # nombre d'imagettes conservees
+MOTIF_MAX = 30           # nombre d'imagettes conservees
 MOTIF_ECART = 45         # distance en deca de laquelle deux trouvailles se valent
 MOTIF_ECHELLE = 0.5      # reduction appliquee avant la recherche
 MOTIF_DEJA_VU = 0.90     # au-dela, un mur n'apprend rien de nouveau
@@ -1086,17 +1086,31 @@ def apprend_motif(img, point):
         return
     try:
         os.makedirs(MOTIF_DIR, exist_ok=True)
-        if len(os.listdir(MOTIF_DIR)) >= MOTIF_MAX:
-            return
         patch = img[y - dy:y + dy, x - dx:x + dx].astype(np.uint8)
-        for connu in charge_motifs():
-            if connu.shape != patch.shape:
-                continue
-            score = cv2.matchTemplate(patch, connu, cv2.TM_CCOEFF_NORMED)[0, 0]
-            if score >= MOTIF_DEJA_VU:
+        noms = sorted(os.listdir(MOTIF_DIR))
+        connus = charge_motifs()
+        for connu in connus:
+            if connu.shape == patch.shape and cv2.matchTemplate(
+                    patch, connu, cv2.TM_CCOEFF_NORMED)[0, 0] >= MOTIF_DEJA_VU:
                 return
+        if len(noms) >= MOTIF_MAX:
+            # Plein, mais ce mur ne ressemble a aucun de ceux qu'on connait :
+            # cesser d'apprendre serait le pire choix. La lumiere du village
+            # change au fil des heures, et les places s'etaient remplies de
+            # murs sombres pendant que les beiges, quatre fois plus nombreux a
+            # monter, n'y avaient plus droit. On remplace donc le plus
+            # redondant : celui qui ressemble le plus a un autre.
+            pires, rang = -2.0, 0
+            for i, a in enumerate(connus):
+                for j, b in enumerate(connus):
+                    if i != j and a.shape == b.shape:
+                        v = float(cv2.matchTemplate(a, b,
+                                                    cv2.TM_CCOEFF_NORMED)[0, 0])
+                        if v > pires:
+                            pires, rang = v, i
+            os.remove(os.path.join(MOTIF_DIR, noms[rang]))
         Image.fromarray(patch).save(os.path.join(MOTIF_DIR, f"{x}-{y}.png"))
-    except (OSError, cv2.error):
+    except (OSError, IndexError, cv2.error):
         pass
 
 
