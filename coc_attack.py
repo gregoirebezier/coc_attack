@@ -2118,12 +2118,14 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
     # des deux echecs ne se declenche jamais : un point rate une fois par
     # phase, la liste repart de zero, et le meme leurre coute cinq secondes a
     # chaque attaque de la nuit.
+    sans_repere = False
     connus, ecartes, suspects, maximes = load_wall_cache()
     if decalage is None:
         # Sans repere, les coordonnees memorisees ne veulent rien dire ici. On
         # travaille a la detection seule plutot que de taper au hasard, et on
         # ne reecrira pas le cache avec des points qu'on ne saurait pas situer.
         connus, ecartes, suspects, maximes = [], [], [], []
+        sans_repere = True
     else:
         # Recales sans etre filtres : un point sorti du cadre sous cette vue y
         # reviendra sous la suivante, la camera alternant entre deux positions.
@@ -2175,8 +2177,12 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         # L'exploration ne sert qu'a decouvrir : une fois assez de remparts
         # connus, elle ne fait plus que perdre cinq secondes par point tire au
         # hasard. On la coupe alors, et on la reprend si le cache se vide.
+        # On n'explore pas au hasard quand le cache a seulement ete mis de
+        # cote faute de repere : sa vacuite est alors un artefact, pas un aveu
+        # d'ignorance. Six tirages aleatoires par phase, cinq secondes chacun,
+        # echouaient ainsi alors que la detection avait dix remparts a offrir.
         explores = []
-        if len(connus) < EXPLORE_JUSQUA:
+        if len(connus) < EXPLORE_JUSQUA and not sans_repere:
             explores = [p for p in explore_points(rng)
                         if not proche(p, ecartes) and not proche(p, connus)
                         and not proche(p, maximes)]
@@ -2269,7 +2275,8 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # cent vingt-huit a elle seule.
             shot = phone.screenshot()
             if verbose:
-                venu = SOURCE_POINT.get((round(point[0]), round(point[1])), "cache")
+                venu = SOURCE_POINT.get((round(point[0]), round(point[1])),
+                                        "cache/exploration")
                 print(f"    mur ({int(point[0])},{int(point[1])}) [{venu}] non "
                       f"selectionne (menu={menu_open(shot)}, "
                       f"titre={selected_title(shot)!r})")
