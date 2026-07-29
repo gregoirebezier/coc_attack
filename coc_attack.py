@@ -1990,10 +1990,18 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             break
         img = phone.screenshot()
         ecran = identify(img, templates)[0]
+        if ecran == "cancel":
+            # La confirmation de sortie du jeu, ouverte par notre propre retour
+            # arriere quand le menu qu'il visait s'etait deja referme. Y voir la
+            # fin de la phase coutait cher : l'une s'est arretee la avec vingt-
+            # neuf remparts detectes et un seul essai fait. On la referme par
+            # Annuler - jamais par OK, qui ferme Clash of Clans - et on reprend.
+            if verbose:
+                print("[i] confirmation de sortie refermee, on reprend")
+            phone.tap(*CANCEL_BUTTON)
+            time.sleep(1.2)
+            continue
         if ecran != "home":
-            # Dire lequel : une phase s'est arretee ici apres un seul essai,
-            # sans message d'epuisement, et rien dans le journal ne permettait
-            # de savoir sur quoi elle etait tombee.
             if verbose:
                 print(f"[i] phase interrompue : ecran {ecran}")
             record_unknown(img, f"phase-{ecran}")
