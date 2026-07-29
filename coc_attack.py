@@ -151,6 +151,9 @@ CAPTURES = 0             # captures d'ecran depuis le debut de l'attaque
 MULTI_DOIGTS = 4
 # None : jamais essaye. True : en service. False : renonce apres un echec.
 MULTI_ETAT = None
+BATAILLE_CALME = 45.0       # debut de combat ou rien ne peut encore le finir
+BATAILLE_POLL_CALME = 6.0   # cadence de surveillance pendant ce debut
+BATAILLE_POLL = 3.0         # cadence ensuite
 BUTIN_RATIO_FIN = 0.10   # part du butin initial en deca de laquelle on arrete
 BUTIN_INTERVALLE = 12.0  # secondes entre deux lectures du butin restant
 MUR_PRIX_MIN = 20_000_000
@@ -2481,7 +2484,8 @@ def attend_fin_combat(phone, templates, args, butin_depart):
     main sur un village encore plein parce qu'une ressource n'a pas ete lue.
     """
     depart = butin_total(butin_depart or {})
-    fin = time.time() + args.max_battle
+    debut = time.time()
+    fin = debut + args.max_battle
     prochaine_lecture = time.time() + BUTIN_INTERVALLE
     demande = False
     while time.time() < fin:
@@ -2501,9 +2505,13 @@ def attend_fin_combat(phone, templates, args, butin_depart):
                     phone.tap(*SCREENS["battle"]["tap"])
                     time.sleep(2.5)
                     demande = True
-        # Meme cadence que la surveillance d'ecran qu'elle remplace : une
-        # capture coute pres d'une seconde, inutile d'en tripler le nombre.
-        time.sleep(3.0)
+        # Une capture coute pres de neuf cents millisecondes, et elles pesent
+        # vingt-neuf pour cent du cycle. Les premieres secondes d'un combat ne
+        # peuvent rien terminer - les troupes viennent d'etre posees - alors on
+        # y regarde deux fois moins souvent. Le reste du temps, la cadence
+        # habituelle, pour ne pas laisser trainer un combat fini.
+        calme = (time.time() - debut) < BATAILLE_CALME
+        time.sleep(BATAILLE_POLL_CALME if calme else BATAILLE_POLL)
     return None
 
 
