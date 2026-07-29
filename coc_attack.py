@@ -137,12 +137,12 @@ PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # premiers sur clair, les derniers sur sombre. Le petit voisinage suit ce
 # changement de plus pres que le grand.
 STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
-# Prix des ameliorations de rempart, donnes par le joueur : 4,2 millions pour
-# un beige, 6 pour un jaune ou un dore noir. En dessous du moins cher, aucun
-# mur n'est payable et la phase ne peut que perdre son temps - une minute a
-# selectionner des remparts pour se voir repondre en rouge.
-MUR_PRIX_MIN = 4_200_000
-MUR_MARGE = 0.85         # marge de securite sur la lecture des reserves
+# En dessous de six millions dans les deux reserves, on ne tente rien et on
+# repart attaquer : c'est le choix du joueur. Un rempart beige coute pourtant
+# 4,2 millions, un jaune ou un dore noir 6 - la phase renonce donc parfois a un
+# beige payable, en echange d'une minute rendue au farm a chaque fois.
+MUR_PRIX_MIN = 6_000_000
+MUR_MARGE = 0.95         # marge de securite sur la lecture des reserves
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
 # l'OCR a ajoute un chiffre : une lecture a quarante et un millions a fait
