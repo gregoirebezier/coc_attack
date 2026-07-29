@@ -156,6 +156,7 @@ BATAILLE_POLL_CALME = 6.0   # cadence de surveillance pendant ce debut
 BATAILLE_POLL = 3.0         # cadence ensuite
 BUTIN_RATIO_FIN = 0.10   # part du butin initial en deca de laquelle on arrete
 BUTIN_INTERVALLE = 12.0  # secondes entre deux lectures du butin restant
+BUTIN_CONFIRMATIONS = 2  # lectures basses de suite avant d'arreter
 MUR_PRIX_MIN = 20_000_000
 MUR_MARGE = 1.00         # seuil applique tel quel, sans marge
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
@@ -2509,6 +2510,7 @@ def attend_fin_combat(phone, templates, args, butin_depart):
     fin = debut + args.max_battle
     prochaine_lecture = time.time() + BUTIN_INTERVALLE
     demande = False
+    bas = 0                 # lectures consecutives sous le seuil
     while time.time() < fin:
         img = phone.screenshot()
         ecran = identify(img, templates)[0]
@@ -2521,7 +2523,14 @@ def attend_fin_combat(phone, templates, args, butin_depart):
             if reste is not None:
                 part = reste / depart
                 print(f"[i] butin restant {part:.0%}")
-                if part <= BUTIN_RATIO_FIN:
+                # Deux lectures basses de suite avant de conclure. La premiere
+                # reddition s'est declenchee sur la toute premiere lecture,
+                # douze secondes apres le debut du combat : un village vide en
+                # douze secondes est peu vraisemblable, et une lecture fausse
+                # coute du butin reel. Le prix de la prudence est douze
+                # secondes de combat en plus.
+                bas = bas + 1 if part <= BUTIN_RATIO_FIN else 0
+                if bas >= BUTIN_CONFIRMATIONS:
                     print("[i] village vide, on termine le combat")
                     phone.tap(*SCREENS["battle"]["tap"])
                     time.sleep(2.5)
