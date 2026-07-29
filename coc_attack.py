@@ -147,6 +147,7 @@ STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
 # 631 948 d'or. Ces minutes sont du farm perdu, alors on rend la main des que
 # le village ne rapporte plus rien.
 # Nombre de doigts poses en meme temps lors d'un depot de troupes.
+CAPTURES = 0             # captures d'ecran depuis le debut de l'attaque
 MULTI_DOIGTS = 4
 # None : jamais essaye. True : en service. False : renonce apres un echec.
 MULTI_ETAT = None
@@ -414,6 +415,14 @@ class Phone:
         self._adb("shell", "input", "keyevent", "4")
 
     def screenshot(self):
+        # Chaque capture coute pres de neuf cents millisecondes : leur nombre
+        # decide du rythme bien plus que la vitesse des taps. On les compte
+        # pour savoir ou elles se depensent.
+        global CAPTURES
+        CAPTURES += 1
+        return self._screenshot()
+
+    def _screenshot(self):
         """Capture l'ecran et la ramene a la resolution de reference.
 
         On prend le format brut plutot que du PNG : encoder le PNG sur le
@@ -2554,6 +2563,9 @@ def end_battle(phone, templates, args, butin_depart=None):
 
 
 def one_round(phone, templates, args, rng):
+    global CAPTURES
+    CAPTURES = 0
+    debut_tour = time.time()
     print("=== Recherche d'un adversaire ===")
     if not goto_battle(phone, templates):
         print("[!] impossible d'atteindre le combat")
@@ -2584,6 +2596,9 @@ def one_round(phone, templates, args, rng):
         print(f"=== Remparts (max {args.walls}) ===")
         n = upgrade_walls(phone, templates, args, rng)
         print(f"[+] {n} rempart(s) ameliore(s)")
+    duree = time.time() - debut_tour
+    print(f"[i] tour en {duree:.0f}s, {CAPTURES} captures "
+          f"({CAPTURES * 0.88:.0f}s a l'ecran)")
     return True
 
 
