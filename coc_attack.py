@@ -107,6 +107,10 @@ UI_ZONES = [
 # texte, avant de recharger le jeu.
 IDLE_PANEL = (560, 330, 2010, 750)
 IDLE_TEXT_BOX = (580, 380, 1700, 560)
+# Ecran blanc "Impossible d'attaquer ce village. Reessayez plus tard."
+ECHEC_BLANC = 220.0                    # luminosite moyenne minimale
+ECHEC_TEXTE = (600, 540, 1800, 620)    # ou lire le message
+ECHEC_RENTRER = (245, 955)             # bouton Rentrer
 IDLE_DARK_MIN = 70.0
 IDLE_RELOAD = (728, 674)          # "Recharger le jeu"
 
@@ -1811,6 +1815,27 @@ def titre_est_rempart(titre):
     return False
 
 
+def recherche_impossible(img):
+    """L'ecran blanc "Impossible d'attaquer ce village" est-il affiche ?
+
+    Le jeu le montre quand l'adversaire trouve est devenu injoignable. Rien
+    d'autre ne lui ressemble : la page est presque entierement blanche, deux
+    cent quarante-six de luminosite moyenne contre cent deux pour un village.
+    Faute de le reconnaitre, le programme le prenait pour une fenetre de
+    confirmation et appuyait sur retour, ce qui n'a aucun effet ici - deux
+    attaques perdues et deux relances du jeu avant que je le voie.
+    """
+    if float(img.mean()) < ECHEC_BLANC:
+        return False
+    x0, y0, x1, y1 = ECHEC_TEXTE
+    z = img[y0:y1, x0:x1]
+    mask = (z.min(axis=2) < 200).astype(np.uint8) * 255
+    big = Image.fromarray(255 - mask).resize(((x1 - x0) * 2, (y1 - y0) * 2),
+                                             Image.LANCZOS)
+    texte = ocr(big, "--psm 7").lower()
+    return "impossible" in texte or "reessay" in texte or "essayez" in texte
+
+
 def confirm_dialog_open(img):
     """La fenetre "Ameliorer votre Rempart au niveau N ?" est-elle affichee ?"""
     x0, y0, x1, y1 = CONFIRM_PANEL
@@ -2459,6 +2484,11 @@ def goto_battle(phone, templates, timeout=150):
 
         if screen == "battle":
             return True
+        if recherche_impossible(img):
+            print("[i] village devenu injoignable, on rentre et on recommence")
+            phone.tap(*ECHEC_RENTRER)
+            time.sleep(3.0)
+            continue
         if screen == "idle":
             print("[i] deconnexion pour inactivite, rechargement du jeu")
             phone.tap(*IDLE_RELOAD)
