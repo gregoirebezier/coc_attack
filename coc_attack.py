@@ -251,22 +251,24 @@ def zone_recherche():
 # Change des que la facon de trouver les remparts change : le cache des points
 # ecartes se purge alors de lui-meme, au lieu de faire porter a la detection
 # actuelle les erreurs de la precedente.
-DETECTEUR_VERSION = "motif-4-recalage"
+DETECTEUR_VERSION = "motif-5-recalage-chaine"
 # Change des que la regle qui declare un mur au maximum change. Ce classement
 # etant definitif, une regle trop laxative laisse derriere elle des remparts
 # retires du vivier pour toujours : il faut pouvoir les rendre.
-REGLE_MAXIMES = "complet-4-recalage"
+REGLE_MAXIMES = "complet-5-recalage-chaine"
 WALL_CACHE = os.path.join(HERE, "walls.json")
 VUE_PHASE = os.path.join(HERE, "vue.png")   # la vue recentree de la derniere phase
 VUE_PRECEDENTE = os.path.join(HERE, "vue_prec.png")   # celle d'avant, pour comparer
-# La vue de reference : celle dans laquelle les coordonnees du cache sont
-# exprimees. Le recentrage n'amene pas toujours la carte au meme endroit - le
-# jeu avale les glissements qui suivent le premier - et les positions finales
-# different de plusieurs centaines de pixels. Plutot que de s'acharner a forcer
-# la camera, on mesure l'ecart et on recale.
-VUE_REFERENCE = os.path.join(HERE, "vue_ref.png")
-REPERE_BOITE = (700, 300, 960, 460)   # morceau de village servant de repere
-REPERE_MIN = 0.45                     # correlation en deca de laquelle on renonce
+# Plusieurs reperes pris a des endroits differents. Un seul ne suffit pas : le
+# bloc de remparts est un motif repetitif, et un repere qui y tombe s'accroche
+# n'importe ou avec un score honorable. Celui qui servait jusqu'ici donnait un
+# decalage qui n'ameliorait rien - cinquante-neuf virgule six de residu contre
+# cinquante-neuf virgule trois sans recalage.
+REPERES = [(520, 200, 780, 360), (900, 180, 1160, 340), (1400, 200, 1660, 360),
+           (600, 560, 860, 700), (1500, 560, 1760, 700)]
+REPERE_MIN = 0.55        # correlation en deca de laquelle un repere ne compte pas
+REPERE_ACCORD = 12       # ecart en pixels sous lequel deux reperes s'accordent
+REPERE_VOIX = 3          # reperes d'accord exiges pour retenir un decalage
 WALL_SAME_POINT = 40     # distance en deca de laquelle deux points se valent
 # Quand un objet est selectionne, une rangee de boutons s'affiche en bas. La
 # proportion de pixels blancs (le texte des boutons) y passe de ~3 % a ~37 %.
@@ -1404,27 +1406,44 @@ def explore_points(rng, n=None):
 def mesure_decalage(img):
     """De combien la vue courante est decalee par rapport a la reference.
 
-    Renvoie (dx, dy), ou None si le repere ne se retrouve pas. Le decalage est
-    une translation pure : verifie par correspondance a plusieurs echelles, le
-    meilleur accord tombe exactement a l'echelle un.
+    La comparaison se fait avec la phase precedente, non avec une vue fixe.
+    Une reference vieille de quelques heures ne ressemble plus au village :
+    cent remparts y ont change d'aspect, et aucun repere ne s'y retrouvait
+    plus. Deux phases voisines, elles, different de moins de deux points.
+
+    Renvoie (dx, dy), ou None si les reperes ne s'accordent pas. Le decalage
+    est une translation pure : verifie par correspondance a quarante et une
+    echelles, le meilleur accord tombe exactement a l'echelle un.
     """
     import cv2
-    if not os.path.exists(VUE_REFERENCE):
+    if not os.path.exists(VUE_PRECEDENTE):
         return (0.0, 0.0)
     try:
-        ref = np.asarray(Image.open(VUE_REFERENCE).convert("RGB"))
+        ref = np.asarray(Image.open(VUE_PRECEDENTE).convert("RGB"))
     except (OSError, ValueError):
         return (0.0, 0.0)
-    x0, y0, x1, y1 = REPERE_BOITE
-    repere = cv2.cvtColor(ref[y0:y1, x0:x1], cv2.COLOR_RGB2BGR)
     scene = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2BGR)
-    if repere.shape[0] >= scene.shape[0] or repere.shape[1] >= scene.shape[1]:
-        return None
-    res = cv2.matchTemplate(scene, repere, cv2.TM_CCOEFF_NORMED)
-    _, score, _, (px, py) = cv2.minMaxLoc(res)
-    if score < REPERE_MIN:
-        return None
-    return (float(px - x0), float(py - y0))
+    propositions = []
+    for x0, y0, x1, y1 in REPERES:
+        repere = cv2.cvtColor(ref[y0:y1, x0:x1], cv2.COLOR_RGB2BGR)
+        if repere.shape[0] >= scene.shape[0] or repere.shape[1] >= scene.shape[1]:
+            continue
+        _, score, _, (px, py) = cv2.minMaxLoc(
+            cv2.matchTemplate(scene, repere, cv2.TM_CCOEFF_NORMED))
+        if score >= REPERE_MIN:
+            propositions.append((float(px - x0), float(py - y0)))
+    # On ne retient qu'un decalage sur lequel plusieurs reperes tombent
+    # d'accord. Un motif repetitif fait dire n'importe quoi a un repere isole,
+    # mais il faudrait une coincidence pour qu'il fasse mentir trois reperes
+    # pris a des endroits differents de la meme facon.
+    for p in propositions:
+        accord = [q for q in propositions
+                  if abs(q[0] - p[0]) <= REPERE_ACCORD
+                  and abs(q[1] - p[1]) <= REPERE_ACCORD]
+        if len(accord) >= REPERE_VOIX:
+            return (sum(q[0] for q in accord) / len(accord),
+                    sum(q[1] for q in accord) / len(accord))
+    return None
 
 
 def load_wall_cache():
@@ -1887,18 +1906,16 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                                      - depart.astype(np.int32)).mean())
                 print(f"[i] vue : ecart avec la phase precedente = {ecart:.1f}")
         Image.fromarray(depart.astype(np.uint8)).save(VUE_PHASE)
-        if not os.path.exists(VUE_REFERENCE):
-            Image.fromarray(depart.astype(np.uint8)).save(VUE_REFERENCE)
     except (OSError, ValueError):
         pass
 
-    # Le cache est exprime dans la vue de reference. Le recentrage n'y ramene
-    # pas toujours la carte - le jeu avale les glissements qui suivent le
-    # premier, et deux phases voisines finissent a deux cent quarante pixels
-    # l'une de l'autre. Plutot que de s'acharner a forcer la camera, on mesure
-    # l'ecart et on recale les points. C'est une translation pure : la
-    # correspondance a plusieurs echelles donne son meilleur accord exactement
-    # a l'echelle un.
+    # Le cache est exprime dans la vue de la phase precedente. Le recentrage ne
+    # ramene pas toujours la carte au meme endroit - le jeu avale les
+    # glissements qui suivent le premier - alors on mesure l'ecart de proche en
+    # proche et on y recale les points, plutot que de s'acharner a forcer la
+    # camera. De proche en proche, car une vue de reference figee vieillit :
+    # cent remparts ont change d'aspect en trois heures, plus aucun repere ne
+    # s'y retrouvait, et le decalage rendu n'ameliorait rien du tout.
     decalage = mesure_decalage(depart)
     if decalage is None:
         print("[i] repere de vue introuvable : cache ignore pour cette phase")
@@ -2180,10 +2197,9 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
               "Amelioration des remparts desactivee.", flush=True)
 
     if decalage is not None:
-        dx, dy = decalage
-        vers_ref = lambda l: [(x - dx, y - dy) for x, y in l]
-        save_wall_cache(vers_ref(connus), vers_ref(ecartes),
-                        vers_ref(suspects), vers_ref(maximes))
+        # Deja exprimes dans la vue de cette phase, qui sera la precedente de
+        # la prochaine.
+        save_wall_cache(connus, ecartes, suspects, maximes)
     if verbose:
         print(f"[i] repere : {len(connus)} remparts connus, {len(ecartes)} points"
               f" ecartes, {len(maximes)} murs au maximum")
