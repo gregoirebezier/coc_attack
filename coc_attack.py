@@ -146,6 +146,10 @@ STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
 # il restait deux minutes sept de chronometre pour un butin deja tombe a
 # 631 948 d'or. Ces minutes sont du farm perdu, alors on rend la main des que
 # le village ne rapporte plus rien.
+# Nombre de doigts poses en meme temps lors d'un depot de troupes.
+MULTI_DOIGTS = 4
+# None : jamais essaye. True : en service. False : renonce apres un echec.
+MULTI_ETAT = None
 BUTIN_RATIO_FIN = 0.10   # part du butin initial en deca de laquelle on arrete
 BUTIN_INTERVALLE = 12.0  # secondes entre deux lectures du butin restant
 MUR_PRIX_MIN = 20_000_000
@@ -362,6 +366,43 @@ class Phone:
         cx, cy = self._pt(sx, sy)
         taps = ";".join(f"input tap {x} {y}" for x, y in (self._pt(*p) for p in points))
         self._adb("shell", f"input tap {cx} {cy};{taps}")
+
+    def pose_simultanee(self, sx, sy, points, doigts=MULTI_DOIGTS):
+        """Selectionne une carte puis pose les troupes par accords de doigts.
+
+        Renvoie False si l'injection n'a pas abouti, a charge de l'appelant de
+        retomber sur `select_and_burst` : le deploiement marche a cent pour
+        cent aujourd'hui, il ne doit pas dependre d'une piece nouvelle.
+
+        Le gain ne vient pas seulement des doigts simultanes. Un `input tap`
+        demarre une machine Java par tap, une soixantaine par carte ; ici toute
+        la chronologie, selection comprise, tient dans une seule.
+        """
+        global MULTI_ETAT
+        if MULTI_ETAT is False:
+            return False
+        try:
+            import helper
+            if MULTI_ETAT is None:
+                helper.installe(self.device)
+                MULTI_ETAT = True
+            texte = helper.timeline_depot(
+                self._pt(sx, sy), [self._pt(*p) for p in points], doigts)
+            envoi = self._adb("shell", f"cat > {helper.SESSION_DISTANTE}",
+                              input=texte.encode(), capture_output=True)
+            if envoi.returncode != 0:
+                raise RuntimeError("ecriture de la chronologie refusee")
+            r = self._adb("shell", helper.commande_session(),
+                          capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError((r.stderr or r.stdout).strip()[:200])
+            return True
+        except Exception as e:      # noqa: BLE001 - tout echec doit se replier
+            if MULTI_ETAT is not False:
+                print(f"[i] pose simultanee indisponible ({e}), "
+                      "retour aux taps un par un", flush=True)
+            MULTI_ETAT = False
+            return False
 
     def glisse(self, x1, y1, x2, y2, ms=500):
         """Fait glisser un doigt : deplace la carte du village."""
@@ -1019,7 +1060,9 @@ def deploy_all(phone, templates, args, rng, verbose=True):
             if kinds[cx] == "sort":
                 # Les sorts se lancent par taps secs, disperses au hasard en
                 # plein milieu du village.
-                phone.select_and_burst(cx, SLOT_TAP_Y, spell_points(args.spell_taps, rng))
+                pts = spell_points(args.spell_taps, rng)
+                if not phone.pose_simultanee(cx, SLOT_TAP_Y, pts):
+                    phone.select_and_burst(cx, SLOT_TAP_Y, pts)
                 continue
             # Un heros ne sort qu'une fois : inutile de lui servir la rafale
             # complete, ce serait deux secondes perdues par heros.
@@ -1033,7 +1076,8 @@ def deploy_all(phone, templates, args, rng, verbose=True):
             start = (rnd - 1) * len(active) + i + idle[cx]
             pts = [jitter(pool[(start + k) % len(pool)], args.jitter * args.random, rng)
                    for k in range(n)]
-            phone.select_and_burst(cx, SLOT_TAP_Y, pts)
+            if not phone.pose_simultanee(cx, SLOT_TAP_Y, pts):
+                phone.select_and_burst(cx, SLOT_TAP_Y, pts)
             if args.random > 0:
                 time.sleep(rng.uniform(0, 0.20 * args.random))
 
