@@ -2229,8 +2229,12 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
                 connus[:] = [p for p in connus if not proche(p, [point])]
             else:
                 suspects.append(point)
+            # Une seule capture sert au journal et a la decision qui suit :
+            # elle coute pres de neuf cents millisecondes, et ce chemin est le
+            # plus frequent d'une phase de remparts - celle qui en demandait
+            # cent vingt-huit a elle seule.
+            shot = phone.screenshot()
             if verbose:
-                shot = phone.screenshot()
                 venu = SOURCE_POINT.get((round(point[0]), round(point[1])), "cache")
                 print(f"    mur ({int(point[0])},{int(point[1])}) [{venu}] non "
                       f"selectionne (menu={menu_open(shot)}, "
@@ -2238,7 +2242,7 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             # Le tap a manque le mur. S'il n'a rien selectionne du tout, il ne
             # faut surtout pas appuyer sur retour : au village, cela ouvre la
             # confirmation de sortie du jeu.
-            if menu_open(phone.screenshot()):
+            if menu_open(shot):
                 retour(phone, "selection-ratee/menu")
                 time.sleep(0.7)
             continue
