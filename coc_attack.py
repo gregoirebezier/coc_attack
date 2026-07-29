@@ -137,11 +137,12 @@ PRIX_ROUGE_MAX = 4       # prix rouges avant de juger une reserve insuffisante
 # premiers sur clair, les derniers sur sombre. Le petit voisinage suit ce
 # changement de plus pres que le grand.
 STOCK_SEUILS = (200, 215, 230, 245, (41, -12), (15, -16))
-# En dessous de six millions dans les deux reserves, on ne tente rien et on
-# repart attaquer : c'est le choix du joueur. Un rempart beige coute pourtant
-# 4,2 millions, un jaune ou un dore noir 6 - la phase renonce donc parfois a un
-# beige payable, en echange d'une minute rendue au farm a chaque fois.
-MUR_PRIX_MIN = 6_000_000
+# On n'ouvre la phase des remparts qu'a partir de vingt millions dans l'une des
+# deux reserves ; en dessous, on enchaine les attaques. Choix du joueur :
+# accumuler puis depenser d'un coup, plutot que de payer une minute de phase a
+# chaque attaque pour un mur ou deux. Vingt millions valent trois remparts a
+# six, et les reserves plafonnent a vingt-neuf.
+MUR_PRIX_MIN = 20_000_000
 MUR_MARGE = 1.00         # seuil applique tel quel, sans marge
 STOCK_ALERTE = 4         # phases sans rempart avant de crier
 # Un stockage ne depasse pas trente millions par ressource. Au-dela, c'est que
