@@ -1989,7 +1989,14 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
         if upgraded >= args.walls:
             break
         img = phone.screenshot()
-        if identify(img, templates)[0] != "home":
+        ecran = identify(img, templates)[0]
+        if ecran != "home":
+            # Dire lequel : une phase s'est arretee ici apres un seul essai,
+            # sans message d'epuisement, et rien dans le journal ne permettait
+            # de savoir sur quoi elle etait tombee.
+            if verbose:
+                print(f"[i] phase interrompue : ecran {ecran}")
+            record_unknown(img, f"phase-{ecran}")
             break
 
         # Les points deja reconnus comme remparts passent devant ; ceux ou
@@ -2010,6 +2017,11 @@ def upgrade_walls(phone, templates, args, rng, verbose=True):
             explores = [p for p in explore_points(rng)
                         if not proche(p, ecartes) and not proche(p, connus)
                         and not proche(p, maximes)]
+        # Le compte des candidats, par provenance : sans lui, une phase qui
+        # n'en trouve qu'un ne se distingue pas d'une phase ou tout a rate.
+        if verbose and not tried:
+            print(f"[i] candidats : {len(detectes)} detectes, {len(connus)} "
+                  f"connus, {len(explores)} explores")
         cands = [p for p in connus if not proche(p, tried)
                  and not proche(p, ecartes) and not proche(p, maximes)
                  and point_taquable(p)] + \
