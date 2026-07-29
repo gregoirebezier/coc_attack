@@ -699,20 +699,37 @@ def read_loot(img, minimum=0):
     return out
 
 
-def butin_total(loot):
-    """Somme or + elixir d'une lecture de butin, ou None si incomplete.
-
-    Une lecture partielle ne doit jamais terminer un combat : mieux vaut
-    laisser le chronometre courir que rendre la main sur un village encore
-    plein parce qu'une ressource n'a pas ete lue.
-    """
-    total = 0
+def butin_par_ressource(loot):
+    """Valeur lue pour chaque ressource, les illisibles en moins."""
+    out = {}
     for nom in ("or", "elixir"):
         lectures = (loot.get(nom) or {}).get("lectures") or []
-        if not lectures:
-            return None
-        total += sorted(lectures)[len(lectures) // 2]
-    return total
+        if lectures:
+            out[nom] = sorted(lectures)[len(lectures) // 2]
+    return out
+
+
+def butin_total(loot):
+    """Somme des ressources lues, ou None si aucune ne l'est."""
+    valeurs = butin_par_ressource(loot)
+    return sum(valeurs.values()) if valeurs else None
+
+
+def part_restante(depart, reste):
+    """Part du butin encore a prendre, sur les seules ressources comparables.
+
+    On ne compare qu'une ressource lue des deux cotes. Reclamer les deux, comme
+    le fait le bot dont vient cette logique, ecarte des combats ou l'or seul est
+    illisible et l'elixir parfaitement net - c'est arrive sur une attaque sur
+    deux. Mais melanger les cotes serait pire : une ressource absente du
+    restant ferait paraitre le village vide alors qu'il ne l'est pas.
+    """
+    a, b = butin_par_ressource(depart), butin_par_ressource(reste)
+    communes = [n for n in a if n in b]
+    total = sum(a[n] for n in communes)
+    if not communes or total <= 0:
+        return None
+    return sum(b[n] for n in communes) / total
 
 
 def loot_is_good(loot, minimum):
@@ -2503,8 +2520,8 @@ def attend_fin_combat(phone, templates, args, butin_depart):
     ne conclut jamais - mieux vaut laisser le chronometre courir que rendre la
     main sur un village encore plein parce qu'une ressource n'a pas ete lue.
     """
-    depart = butin_total(butin_depart or {})
-    if depart is None:
+    depart = butin_depart or {}
+    if not butin_par_ressource(depart):
         print("[i] butin de depart illisible : le combat ira a son terme")
     debut = time.time()
     fin = debut + args.max_battle
@@ -2516,12 +2533,11 @@ def attend_fin_combat(phone, templates, args, butin_depart):
         ecran = identify(img, templates)[0]
         if ecran in ("result", "home"):
             return ecran
-        if (not demande and depart and ecran == "battle"
+        if (not demande and butin_par_ressource(depart) and ecran == "battle"
                 and time.time() >= prochaine_lecture):
             prochaine_lecture = time.time() + BUTIN_INTERVALLE
-            reste = butin_total(read_loot(img))
-            if reste is not None:
-                part = reste / depart
+            part = part_restante(depart, read_loot(img))
+            if part is not None:
                 print(f"[i] butin restant {part:.0%}")
                 # Deux lectures basses de suite avant de conclure. La premiere
                 # reddition s'est declenchee sur la toute premiere lecture,
