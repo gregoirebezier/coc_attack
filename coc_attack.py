@@ -151,6 +151,8 @@ CAPTURES = 0             # captures d'ecran depuis le debut de l'attaque
 MULTI_DOIGTS = 4
 # None : jamais essaye. True : en service. False : renonce apres un echec.
 MULTI_ETAT = None
+GOTO_APRES_TAP = 1.0     # pause apres un tap de navigation
+GOTO_PATIENCE = 4.5      # au-dela, l'ecran s'obstine et on retape
 BATAILLE_CALME = 45.0       # debut de combat ou rien ne peut encore le finir
 BATAILLE_POLL_CALME = 6.0   # cadence de surveillance pendant ce debut
 BATAILLE_POLL = 3.0         # cadence ensuite
@@ -2418,9 +2420,18 @@ def wait_for(phone, templates, wanted, timeout, poll=1.5):
 
 
 def goto_battle(phone, templates, timeout=150):
-    """Depuis le village : Attaquer -> Trouver une partie -> Attaquer."""
+    """Depuis le village : Attaquer -> Trouver une partie -> Attaquer.
+
+    On attend que l'ecran change, on ne dort plus un temps fixe. Trois secondes
+    apres chaque tap, cinq pour l'ecran d'armee, faisaient onze secondes de
+    pauses aveugles par attaque, que le jeu reponde en une seconde ou en
+    quatre. Retaper le meme ecran serait le seul danger - un second appui sur
+    Attaquer peut refermer ce qu'on vient d'ouvrir - alors on ne retape qu'un
+    ecran qui s'obstine.
+    """
     deadline = time.time() + timeout
     unknown = 0
+    agi_sur, agi_a = None, 0.0
     while time.time() < deadline:
         img = phone.screenshot()
         screen, score = identify(img, templates)
@@ -2457,9 +2468,13 @@ def goto_battle(phone, templates, timeout=150):
             continue
 
         unknown = 0
+        if screen == agi_sur and time.time() - agi_a < GOTO_PATIENCE:
+            time.sleep(0.25)        # le jeu n'a pas encore bascule
+            continue
         print(f"[>] {screen}")
         phone.tap(*SCREENS[screen]["tap"])
-        time.sleep(5.0 if screen == "army" else 3.0)
+        agi_sur, agi_a = screen, time.time()
+        time.sleep(GOTO_APRES_TAP)
 
     return False
 
